@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Qedy Music Maker</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <h1>Qedy Music Maker</h1>
+        <p class="subtitle">Browser-based synth sequencer for game music</p>
+      </header>
+
+      <div class="app-body">
+        <aside class="sidebar">
+          <section class="transport">
+            <div class="transport-row">
+              <button id="play-btn" class="btn primary">▶ Play</button>
+              <button id="stop-btn" class="btn">■ Stop</button>
+            </div>
+            <label class="bpm-control">
+              BPM
+              <input id="bpm-input" type="number" min="40" max="300" value="120" />
+            </label>
+            <label class="bpm-control">
+              Length
+              <select id="length-select">
+                <option value="32">2 bars (loop)</option>
+                <option value="64">4 bars (loop)</option>
+                <option value="128">8 bars (track)</option>
+                <option value="256">16 bars (track)</option>
+                <option value="512">32 bars (long track)</option>
+              </select>
+            </label>
+            <div class="project-controls">
+              <input id="project-name-input" type="text" class="project-name-input" value="Untitled Project" />
+              <div class="transport-row">
+                <button id="save-project" class="btn small">💾 Save</button>
+                <button id="load-project" class="btn small">📂 Load</button>
+                <input id="load-project-input" type="file" accept=".qedy,application/json" hidden />
+              </div>
+            </div>
+            <div class="export-controls">
+              <button id="export-wav" class="btn small">WAV</button>
+              <button id="export-mp3" class="btn small">MP3</button>
+              <button id="export-ogg" class="btn small">OGG</button>
+            </div>
+            <span id="status" class="status"></span>
+          </section>
+
+          <section class="auto-build-panel">
+            <strong>Auto Build</strong>
+            <label class="range-label">
+              Root
+              <select id="ab-root"></select>
+            </label>
+            <label class="range-label">
+              Scale
+              <select id="ab-scale">
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+                <option value="pentatonicMajor">Pentatonic Major</option>
+                <option value="pentatonicMinor">Pentatonic Minor</option>
+                <option value="chromatic">Chromatic</option>
+              </select>
+            </label>
+            <label class="density-label">
+              Density
+              <input id="ab-density" type="range" min="0.1" max="0.9" step="0.05" value="0.4" />
+            </label>
+            <label class="checkbox-label">
+              <input id="ab-instruments" type="checkbox" checked />
+              Random instruments
+            </label>
+            <label class="checkbox-label">
+              <input id="ab-tempo" type="checkbox" />
+              Random tempo
+            </label>
+            <button id="auto-build-btn" class="btn primary">🎲 Auto Build All</button>
+          </section>
+
+          <section class="scope-panel">
+            <canvas id="oscilloscope" width="400" height="100"></canvas>
+          </section>
+
+          <section class="demo-panel">
+            <strong>Demo Library</strong>
+            <select id="demo-select"></select>
+            <p id="demo-description" class="demo-description"></p>
+            <button id="load-demo-btn" class="btn">▶ Load Demo</button>
+          </section>
+
+          <section class="tracks-panel">
+            <div class="sidebar-header">
+              <h2>Tracks</h2>
+              <button id="add-track" class="btn small">+ Add</button>
+            </div>
+            <div id="track-tabs" class="track-list"></div>
+          </section>
+        </aside>
+
+        <main class="main-column">
+          <section class="editor-panel">
+            <div id="track-controls" class="track-controls"></div>
+            <div id="piano-roll-container"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
