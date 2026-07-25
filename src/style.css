@@ -42,86 +42,112 @@
   box-sizing: border-box;
 }
 
+html,
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 #app {
-  max-width: 1400px;
+  height: 100vh;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-header {
+  flex: 0 0 auto;
 }
 
 .app-header h1 {
-  font-size: 32px;
+  font-size: 20px;
   margin: 0;
   color: var(--text-h);
 }
 
 .subtitle {
-  margin: 4px 0 20px;
+  margin: 2px 0 0;
+  font-size: 12px;
   color: var(--text);
 }
 
 .app-body {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 20px;
+  align-items: stretch;
+  gap: 16px;
 }
 
 .sidebar {
-  flex: 0 0 300px;
+  flex: 0 0 270px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  position: sticky;
-  top: 24px;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .demo-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 5px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-bg);
+  flex: 0 0 auto;
 }
 
 .demo-panel select {
   font: inherit;
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
   width: 100%;
+  font-size: 13px;
 }
 
 .demo-description {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
-  line-height: 1.4;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .tracks-panel {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: 6px 10px;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .sidebar-header h2 {
-  font-size: 15px;
+  font-size: 13px;
   margin: 0;
   color: var(--text-h);
 }
@@ -129,6 +155,8 @@ body {
 .main-column {
   flex: 1 1 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .btn {
@@ -175,27 +203,30 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  padding: 16px;
+  gap: 5px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-bg);
+  flex: 0 0 auto;
 }
 
 .transport-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
-.transport-row .btn {
+.transport-row .btn,
+.transport-row > label {
   flex: 1 1 0;
+  min-width: 0;
 }
 
 .bpm-control {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .bpm-control input,
@@ -203,7 +234,7 @@ body {
   flex: 1 1 0;
   min-width: 0;
   font: inherit;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
@@ -213,22 +244,23 @@ body {
 .project-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .project-name-input {
   font: inherit;
-  padding: 8px 10px;
+  padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
   width: 100%;
+  font-size: 13px;
 }
 
 .export-controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .export-controls .btn {
@@ -236,51 +268,62 @@ body {
 }
 
 .status {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--accent);
   min-height: 1.2em;
+  line-height: 1.3;
 }
 
 .scope-panel {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #0a0d0a;
-  padding: 8px;
+  padding: 6px;
   overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .scope-panel canvas {
   display: block;
   width: 100%;
-  height: 100px;
+  height: 48px;
 }
 
 .editor-panel {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .track-list {
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 6px;
   gap: 4px;
-  max-height: calc(100vh - 160px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 
 .track-tab {
   font: inherit;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   text-align: left;
   width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
 
 .track-tab.active {
@@ -292,29 +335,32 @@ body {
 .track-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .track-name-input {
   font: inherit;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
-  width: 140px;
+  width: 120px;
+  font-size: 13px;
 }
 
 .track-controls select {
   font: inherit;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
+  font-size: 13px;
 }
 
 .vol-label {
@@ -325,8 +371,10 @@ body {
 }
 
 #piano-roll-container {
-  overflow-x: auto;
-  padding: 12px;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
 }
 
 .piano-roll {
@@ -409,22 +457,29 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 6px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel-bg);
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.auto-build-panel strong {
+  font-size: 13px;
 }
 
 .auto-build-panel select {
   font: inherit;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
   flex: 1 1 0;
   min-width: 0;
+  font-size: 12px;
 }
 
 .range-label,
@@ -436,18 +491,34 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-@media (max-width: 800px) {
+@media (max-height: 820px) {
+  .demo-description {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  html,
+  body {
+    overflow: auto;
+  }
+
+  #app {
+    height: auto;
+    min-height: 100vh;
+  }
+
   .app-body {
     flex-direction: column;
   }
@@ -455,7 +526,7 @@ body {
   .sidebar {
     flex: none;
     width: 100%;
-    position: static;
+    overflow-y: visible;
   }
 
   .track-list {
@@ -466,5 +537,9 @@ body {
 
   .track-tab {
     width: auto;
+  }
+
+  .editor-panel {
+    min-height: 480px;
   }
 }
