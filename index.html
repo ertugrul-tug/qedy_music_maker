@@ -13,12 +13,29 @@
         <p class="subtitle">Browser-based synth sequencer for game music</p>
       </header>
 
+      <nav class="mobile-tabs">
+        <button class="mobile-tab-btn" data-tab="tracks">Tracks</button>
+        <button class="mobile-tab-btn" data-tab="controls">Controls</button>
+        <button class="mobile-tab-btn active" data-tab="editor">Editor</button>
+      </nav>
+
       <div class="app-body">
-        <aside class="sidebar">
+        <aside class="tracks-sidebar">
+          <section class="tracks-panel">
+            <div class="sidebar-header">
+              <h2>Tracks</h2>
+              <button id="add-track" class="btn small">+ Add</button>
+            </div>
+            <div id="track-tabs" class="track-list"></div>
+          </section>
+        </aside>
+
+        <aside class="controls-sidebar">
           <section class="transport">
             <div class="transport-row">
-              <button id="play-btn" class="btn primary">▶ Play</button>
-              <button id="stop-btn" class="btn">■ Stop</button>
+              <button id="play-btn" class="btn primary small">▶ Play</button>
+              <button id="pause-btn" class="btn small">⏸ Pause</button>
+              <button id="stop-btn" class="btn small">■ Stop</button>
             </div>
             <div class="transport-row">
               <label class="bpm-control">
@@ -96,14 +113,6 @@
             <select id="demo-select"></select>
             <p id="demo-description" class="demo-description"></p>
             <button id="load-demo-btn" class="btn">▶ Load Demo</button>
-          </section>
-
-          <section class="tracks-panel">
-            <div class="sidebar-header">
-              <h2>Tracks</h2>
-              <button id="add-track" class="btn small">+ Add</button>
-            </div>
-            <div id="track-tabs" class="track-list"></div>
           </section>
         </aside>
 

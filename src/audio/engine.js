@@ -125,6 +125,12 @@ export class Engine {
     for (const track of this.tracks) {
       track.cells = Array.from({ length: newSteps }, (_, i) => track.cells[i] || new Set());
     }
+    // The built sequence's step count is fixed at build time; force a rebuild on next play().
+    if (this.sequence) {
+      this.sequence.stop();
+      this.sequence.dispose();
+      this.sequence = null;
+    }
   }
 
   toggleNote(trackId, step, midi) {
@@ -208,13 +214,27 @@ export class Engine {
 
   async play() {
     await Tone.start();
-    this._buildSequence();
-    this.sequence.start(0);
+    // Resuming from pause: keep the existing sequence so playback continues
+    // from where it left off instead of jumping back to step 0.
+    if (!this.sequence) {
+      this._buildSequence();
+      this.sequence.start(0);
+    }
     Tone.Transport.start();
   }
 
+  // Halts playback but keeps the current position, so play() resumes from here.
+  pause() {
+    Tone.Transport.pause();
+    // Cancel already-queued playhead redraws (Tone.Draw has lookahead) so the
+    // playhead doesn't visually advance one extra step after pausing.
+    Tone.Draw.cancel();
+  }
+
+  // Halts playback and resets position to the start.
   stop() {
     Tone.Transport.stop();
+    Tone.Draw.cancel();
     if (this.sequence) {
       this.sequence.stop();
       this.sequence.dispose();
@@ -225,6 +245,10 @@ export class Engine {
 
   isPlaying() {
     return Tone.Transport.state === 'started';
+  }
+
+  isPaused() {
+    return Tone.Transport.state === 'paused';
   }
 
   // Renders the full pattern offline and returns an AudioBuffer.

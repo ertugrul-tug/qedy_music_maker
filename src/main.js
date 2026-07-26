@@ -16,6 +16,7 @@ const trackControlsEl = document.getElementById('track-controls');
 const pianoRollEl = document.getElementById('piano-roll-container');
 const statusEl = document.getElementById('status');
 const playBtn = document.getElementById('play-btn');
+const pauseBtn = document.getElementById('pause-btn');
 const stopBtn = document.getElementById('stop-btn');
 const bpmInput = document.getElementById('bpm-input');
 const abRootSelect = document.getElementById('ab-root');
@@ -28,6 +29,19 @@ const lengthSelect = document.getElementById('length-select');
 const scopeCanvas = document.getElementById('oscilloscope');
 const demoSelect = document.getElementById('demo-select');
 const demoDescriptionEl = document.getElementById('demo-description');
+
+const mobileTabButtons = document.querySelectorAll('.mobile-tab-btn');
+const mobileTabTargets = {
+  tracks: document.querySelector('.tracks-sidebar'),
+  controls: document.querySelector('.controls-sidebar'),
+  editor: document.querySelector('.main-column'),
+};
+function setMobileTab(tab) {
+  mobileTabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+  Object.entries(mobileTabTargets).forEach(([key, el]) => el.classList.toggle('active-tab', key === tab));
+}
+mobileTabButtons.forEach((btn) => btn.addEventListener('click', () => setMobileTab(btn.dataset.tab)));
+setMobileTab('editor');
 
 ROOT_NAMES.forEach((name, i) => {
   const opt = document.createElement('option');
@@ -102,6 +116,7 @@ function syncLengthSelect() {
 }
 
 lengthSelect.addEventListener('change', () => {
+  engine.stop();
   engine.setLength(Number(lengthSelect.value));
   renderAll();
   setStatus(`Length set to ${engine.steps} steps`);
@@ -253,9 +268,16 @@ function renderAll() {
 }
 
 playBtn.addEventListener('click', async () => {
-  setStatus('Playing…');
+  setStatus(engine.isPaused() ? 'Resuming…' : 'Playing…');
   engine.onStep = (step) => updatePlayhead(pianoRollEl, step);
   await engine.play();
+  setStatus('Playing…');
+});
+
+pauseBtn.addEventListener('click', () => {
+  if (!engine.isPlaying()) return;
+  engine.pause();
+  setStatus('Paused');
 });
 
 stopBtn.addEventListener('click', () => {
@@ -324,7 +346,7 @@ loadInput.addEventListener('change', async () => {
   try {
     const text = await file.text();
     const data = parseProjectFile(text);
-    if (engine.isPlaying()) engine.stop();
+    engine.stop();
     const firstId = applyProjectToEngine(engine, data, createTrack);
     activeTrackId = firstId;
     bpmInput.value = String(engine.bpm);
@@ -343,7 +365,7 @@ loadInput.addEventListener('change', async () => {
 document.getElementById('load-demo-btn').addEventListener('click', () => {
   const demo = DEMOS.find((d) => d.id === demoSelect.value);
   if (!demo) return;
-  if (engine.isPlaying()) engine.stop();
+  engine.stop();
   const firstId = applyProjectToEngine(engine, demo.data, createTrack);
   activeTrackId = firstId;
   bpmInput.value = String(engine.bpm);
