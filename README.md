@@ -71,3 +71,7 @@ npm run build
 ```
 
 Outputs a static site to `dist/`, which can be hosted anywhere (or embedded as a dev tool alongside your game project).
+
+## Sampled instruments
+
+Instruments labelled "(sampled)" (piano, strings, brass, woodwinds, guitars, sections and a full orchestra) use real recordings that the browser loads from public CDNs the first time they are used (roughly 3–20 MB each, then cached). They need an internet connection; synth instruments work offline. Credits: the [tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments) sample set and the Salamander Grand Piano by Alexander Holm, both licensed [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/). Keep this attribution if you ship music made with them.

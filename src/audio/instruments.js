@@ -148,4 +148,51 @@ Object.assign(INSTRUMENTS, {
     },
   },
 });
-INSTRUMENT_KEYS.push('strings', 'brass', 'choir', 'kick', 'snareDrum', 'hat');
+
+// ---- Sampled (real recorded) instruments ----
+// Loaded on demand from public CDNs when a track or the live keyboard uses them (CC-BY 3.0:
+// Salamander Grand Piano by Alexander Holm, other instruments from nbrosowsky/tonejs-instruments).
+const TONEJS = 'https://nbrosowsky.github.io/tonejs-instruments/samples/';
+const SALAMANDER = 'https://tonejs.github.io/audio/salamander/';
+
+// Sample files are named like "As3.mp3" for A#3; a Tone.Sampler pitches the nearest sample to any note.
+function sampled(label, baseUrl, notes, release = 1) {
+  const urls = Object.fromEntries(notes.split(' ').map((n) => [n, `${n.replace('#', 's')}.mp3`]));
+  return { label: `${label} (sampled)`, sampler: { baseUrl, urls, release } };
+}
+
+Object.assign(INSTRUMENTS, {
+  sPiano: sampled('Grand Piano', SALAMANDER, 'A0 C1 D#1 F#1 A1 C2 D#2 F#2 A2 C3 D#3 F#3 A3 C4 D#4 F#4 A4 C5 D#5 F#5 A5 C6 D#6 F#6 A6 C7', 1),
+  sViolin: sampled('Violin', `${TONEJS}violin/`, 'G3 A3 C4 E4 G4 A4 C5 E5 G5 A5 C6 E6 G6 A6 C7'),
+  sCello: sampled('Cello', `${TONEJS}cello/`, 'C2 D#2 A2 C3 D#3 F#3 A3 C4 D#4 F#4 A4 C5'),
+  sContrabass: sampled('Contrabass', `${TONEJS}contrabass/`, 'G1 C2 E2 A2 C#3 E3'),
+  sFlute: sampled('Flute', `${TONEJS}flute/`, 'C4 E4 A4 C5 E5 A5 C6 E6 A6 C7'),
+  sClarinet: sampled('Clarinet', `${TONEJS}clarinet/`, 'D3 F3 A#3 D4 F4 A#4 D5 F5 A#5 D6 F#6'),
+  sBassoon: sampled('Bassoon', `${TONEJS}bassoon/`, 'G2 A2 C3 G3 A3 C4 E4 G4 A4 C5'),
+  sFrenchHorn: sampled('French Horn', `${TONEJS}french-horn/`, 'A1 C2 D#2 G2 D3 F3 A3 C4 D5 F5'),
+  sTrumpet: sampled('Trumpet', `${TONEJS}trumpet/`, 'F3 A3 C4 D#4 F4 G4 A#4 D5 F5 A5 C6'),
+  sTrombone: sampled('Trombone', `${TONEJS}trombone/`, 'A#1 C#2 F2 A#2 D3 F3 A#3 D4'),
+  sTuba: sampled('Tuba', `${TONEJS}tuba/`, 'F1 A#1 D#2 F2 A#2 D3 F3 A#3 D4'),
+  sHarp: sampled('Harp', `${TONEJS}harp/`, 'E1 B1 D2 A2 C3 G3 D4 A4 C5 G5 D6 A6', 2),
+  sOrgan: sampled('Organ', `${TONEJS}organ/`, 'A1 C2 F#2 C3 D#3 A3 C4 F#4 C5 A5 C6', 0.3),
+  sXylophone: sampled('Xylophone', `${TONEJS}xylophone/`, 'G4 C5 G5 C6 G6 C7 G7 C8', 0.5),
+  sGuitarNylon: sampled('Nylon Guitar', `${TONEJS}guitar-nylon/`, 'B1 E2 A2 D3 G3 B3 E4 A4 D5 F#5'),
+  sGuitarAcoustic: sampled('Acoustic Guitar', `${TONEJS}guitar-acoustic/`, 'E2 A2 D3 G3 B3 E4 A4 D5'),
+  sGuitarElectric: sampled('Electric Guitar', `${TONEJS}guitar-electric/`, 'E2 A2 C3 F#3 C4 F#4 C5 F#5 C6'),
+  sBassElectric: sampled('Electric Bass', `${TONEJS}bass-electric/`, 'E1 A#1 E2 A#2 E3 A#3 E4', 0.5),
+  sSax: sampled('Saxophone', `${TONEJS}saxophone/`, 'C#3 E3 G3 A#3 C#4 E4 G4 A#4 C#5 E5 G5'),
+  // Layered sections: several sampled instruments played together.
+  sStrings: { label: 'String Section (sampled)', layers: ['sViolin', 'sCello', 'sContrabass'] },
+  sBrass: { label: 'Brass Section (sampled)', layers: ['sTrumpet', 'sTrombone', 'sFrenchHorn', 'sTuba'] },
+  sOrchestra: { label: 'Full Orchestra (sampled)', layers: ['sViolin', 'sCello', 'sFrenchHorn', 'sFlute'] },
+});
+
+INSTRUMENT_KEYS.push(
+  'strings', 'brass', 'choir', 'kick', 'snareDrum', 'hat',
+  'sPiano', 'sViolin', 'sCello', 'sContrabass', 'sFlute', 'sClarinet', 'sBassoon', 'sFrenchHorn', 'sTrumpet',
+  'sTrombone', 'sTuba', 'sHarp', 'sOrgan', 'sXylophone', 'sGuitarNylon', 'sGuitarAcoustic', 'sGuitarElectric',
+  'sBassElectric', 'sSax', 'sStrings', 'sBrass', 'sOrchestra'
+);
+
+// Instruments that need no network: used by Auto Build's random instrument pick.
+export const SYNTH_KEYS = INSTRUMENT_KEYS.filter((k) => !INSTRUMENTS[k].sampler && !INSTRUMENTS[k].layers);

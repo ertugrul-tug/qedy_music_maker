@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { generatePattern } from './generator.js';
-import { INSTRUMENTS, INSTRUMENT_KEYS, DEFAULT_INSTRUMENT } from './instruments.js';
+import { INSTRUMENTS, SYNTH_KEYS, DEFAULT_INSTRUMENT } from './instruments.js';
 
 export const DEFAULT_STEPS = 32; // 2 bars of 16th notes — a short loop
 export const LOW_MIDI = 48; // C3
@@ -50,8 +50,73 @@ export function createTrack(name = `Track ${nextTrackId}`, steps = DEFAULT_STEPS
   return track;
 }
 
-export function buildVoice(instrumentKey) {
+// A Tone.Sampler that stays silent (instead of throwing) until its samples have loaded.
+class SafeSampler extends Tone.Sampler {
+  triggerAttack(...args) {
+    return this.loaded ? super.triggerAttack(...args) : this;
+  }
+
+  triggerAttackRelease(...args) {
+    return this.loaded ? super.triggerAttackRelease(...args) : this;
+  }
+}
+
+function buildSampler(preset, onStatus) {
+  onStatus(`Loading ${preset.label}…`);
+  return new SafeSampler({
+    ...preset.sampler,
+    onload: () => onStatus(`${preset.label} ready`),
+    onerror: (err) => {
+      console.error(err);
+      onStatus(`Could not load ${preset.label} (are you offline?)`);
+    },
+  });
+}
+
+// Several samplers playing the same notes, exposed with the same trigger API as a single voice.
+class LayerVoice extends Tone.Gain {
+  constructor(preset, onStatus) {
+    super(0.7);
+    let ready = 0;
+    onStatus(`Loading ${preset.label}…`);
+    this.layers = preset.layers.map((key) =>
+      buildSampler(INSTRUMENTS[key], (msg) => {
+        if (msg.startsWith('Could not')) onStatus(msg);
+        else if (msg.endsWith('ready') && ++ready === preset.layers.length) onStatus(`${preset.label} ready`);
+      }).connect(this)
+    );
+  }
+
+  triggerAttack(...args) {
+    this.layers.forEach((l) => l.triggerAttack(...args));
+    return this;
+  }
+
+  triggerRelease(...args) {
+    this.layers.forEach((l) => l.triggerRelease(...args));
+    return this;
+  }
+
+  triggerAttackRelease(...args) {
+    this.layers.forEach((l) => l.triggerAttackRelease(...args));
+    return this;
+  }
+
+  releaseAll(...args) {
+    this.layers.forEach((l) => l.releaseAll(...args));
+    return this;
+  }
+
+  dispose() {
+    this.layers.forEach((l) => l.dispose());
+    return super.dispose();
+  }
+}
+
+export function buildVoice(instrumentKey, onStatus = () => {}) {
   const preset = INSTRUMENTS[instrumentKey] || INSTRUMENTS[DEFAULT_INSTRUMENT];
+  if (preset.layers) return new LayerVoice(preset, onStatus);
+  if (preset.sampler) return buildSampler(preset, onStatus);
   const SynthClass = SYNTH_CLASSES[preset.synth] || Tone.Synth;
   return new Tone.PolySynth(SynthClass, preset.options);
 }
@@ -65,8 +130,8 @@ function createFx(dest) {
 }
 
 // synth -> volume -> panner -> dest, with post-fader sends to the reverb and delay buses.
-function createChannel(track, dest, fx) {
-  const synth = buildVoice(track.instrument);
+function createChannel(track, dest, fx, onStatus) {
+  const synth = buildVoice(track.instrument, onStatus);
   const volume = new Tone.Volume(0);
   const panner = new Tone.Panner(track.pan);
   const sendRev = new Tone.Gain(track.reverb).connect(fx.reverb);
@@ -89,6 +154,7 @@ export class Engine {
     this.instruments = new Map(); // trackId -> {synth, volume}
     this.sequence = null;
     this.onStep = null;
+    this.onSampleStatus = null; // (message) => void, reports sample loading progress
     Tone.Transport.bpm.value = this.bpm;
 
     // All live tracks route through this shared bus so the analyser sees the mixed signal.
@@ -161,7 +227,7 @@ export class Engine {
   }
 
   _buildInstrument(track) {
-    this.instruments.set(track.id, createChannel(track, this.master, this.fx));
+    this.instruments.set(track.id, createChannel(track, this.master, this.fx, (msg) => this.onSampleStatus?.(msg)));
     this.applyMix();
   }
 
@@ -326,7 +392,7 @@ export class Engine {
     }
     for (const track of this.tracks) {
       if (randomizeInstruments) {
-        const key = INSTRUMENT_KEYS[Math.floor(Math.random() * INSTRUMENT_KEYS.length)];
+        const key = SYNTH_KEYS[Math.floor(Math.random() * SYNTH_KEYS.length)];
         this.setInstrument(track.id, key);
       }
       this.randomizeTrack(track.id, { root, scaleName, density });
@@ -417,6 +483,7 @@ export class Engine {
         ch.volume.volume.value = isAudible(track, anySolo) ? track.volume : -Infinity;
         offlineInstruments.set(track.id, ch.synth);
       }
+      await Tone.loaded(); // sampled instruments must finish loading before rendering
       const steps = Array.from({ length: this.steps }, (_, i) => i);
       const seq = new Tone.Sequence(
         (time, step) => {

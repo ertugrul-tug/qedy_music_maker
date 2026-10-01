@@ -48,7 +48,7 @@ export function createLive(engine) {
   function setInstrument(key) {
     instrument = key;
     if (synth) synth.dispose();
-    synth = buildVoice(key).connect(reverb);
+    synth = buildVoice(key, (msg) => engine.onSampleStatus?.(msg)).connect(reverb);
   }
   setInstrument(instrument);
 

@@ -870,3 +870,7 @@ input[type='range'].fader {
 .ruler-cell.beat-start {
   border-left: 1px solid #343846;
 }
+
+.demo-description a {
+  color: var(--accent);
+}

@@ -11,6 +11,7 @@ import * as Tone from 'tone';
 import { createLive, RHYTHMS } from './audio/live.js';
 
 const engine = new Engine();
+engine.onSampleStatus = (msg) => setStatus(msg);
 let activeTrackId = null;
 
 const trackTabsEl = document.getElementById('track-tabs');
