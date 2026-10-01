@@ -73,8 +73,16 @@
 
         <main class="main-column">
           <section class="editor-panel">
+            <div class="view-tabs">
+              <button class="view-tab active" data-view="roll">Piano Roll</button>
+              <button class="view-tab" data-view="mixer">Mixer</button>
+              <span class="spacer"></span>
+              <button id="undo-btn" class="btn small" title="Undo (Ctrl+Z)">↶</button>
+              <button id="redo-btn" class="btn small" title="Redo (Ctrl+Y)">↷</button>
+            </div>
             <div id="track-controls" class="track-controls"></div>
             <div id="piano-roll-container"></div>
+            <div id="mixer" class="mixer" hidden></div>
           </section>
         </main>
 

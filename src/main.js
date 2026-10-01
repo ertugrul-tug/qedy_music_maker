@@ -118,6 +118,7 @@ function syncLengthSelect() {
 }
 
 lengthSelect.addEventListener('change', () => {
+  clearHistory();
   engine.stop();
   engine.setLength(Number(lengthSelect.value));
   renderAll();
@@ -127,15 +128,45 @@ lengthSelect.addEventListener('change', () => {
 function renderTabs() {
   trackTabsEl.innerHTML = '';
   engine.tracks.forEach((track) => {
-    const tab = document.createElement('button');
+    const tab = document.createElement('div');
     tab.className = 'track-tab' + (track.id === activeTrackId ? ' active' : '');
-    tab.textContent = track.name;
+    const name = document.createElement('span');
+    name.className = 'track-tab-name';
+    name.textContent = track.name;
+    tab.append(name, muteSoloButtons(track));
     tab.addEventListener('click', () => {
       activeTrackId = track.id;
       renderAll();
     });
     trackTabsEl.appendChild(tab);
   });
+}
+
+// Small M / S buttons shared by the track list and the mixer strips.
+function muteSoloButtons(track) {
+  const wrap = document.createElement('span');
+  wrap.className = 'ms-btns';
+  [['M', 'muted', 'Mute', (v) => engine.setMuted(track.id, v)], ['S', 'solo', 'Solo', (v) => engine.setSolo(track.id, v)]].forEach(
+    ([label, key, title, apply]) => {
+      const b = document.createElement('button');
+      b.className = `ms ms-${key}` + (track[key] ? ' on' : '');
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        apply(!track[key]);
+        refreshMix();
+      });
+      wrap.appendChild(b);
+    }
+  );
+  return wrap;
+}
+
+function refreshMix() {
+  renderTabs();
+  renderControls();
+  renderMixer();
 }
 
 function renderControls() {
@@ -182,8 +213,7 @@ function renderControls() {
   muteBtn.textContent = track.muted ? 'Muted' : 'Mute';
   muteBtn.addEventListener('click', () => {
     engine.setMuted(track.id, !track.muted);
-    muteBtn.classList.toggle('active', track.muted);
-    muteBtn.textContent = track.muted ? 'Muted' : 'Mute';
+    refreshMix();
   });
 
   const rangeLabel = document.createElement('label');
@@ -216,6 +246,7 @@ function renderControls() {
   randomizeBtn.className = 'btn small';
   randomizeBtn.textContent = '🎲 Randomize';
   randomizeBtn.addEventListener('click', () => {
+    pushUndo();
     engine.randomizeTrack(track.id, {
       root: Number(abRootSelect.value),
       scaleName: abScaleSelect.value,
@@ -228,6 +259,7 @@ function renderControls() {
   clearBtn.className = 'btn small';
   clearBtn.textContent = 'Clear';
   clearBtn.addEventListener('click', () => {
+    pushUndo();
     engine.clearTrack(track.id);
     renderGrid();
   });
@@ -237,6 +269,7 @@ function renderControls() {
   removeBtn.textContent = 'Remove Track';
   removeBtn.addEventListener('click', () => {
     if (engine.tracks.length <= 1) return;
+    clearHistory();
     engine.removeTrack(track.id);
     activeTrackId = engine.tracks[0].id;
     renderAll();
@@ -249,6 +282,7 @@ function renderControls() {
       b.textContent = label;
       b.title = title;
       b.addEventListener('click', () => {
+        pushUndo();
         engine.shiftTrack(track.id, delta);
         renderGrid();
       });
@@ -273,6 +307,7 @@ function renderGrid() {
   const track = getActiveTrack();
   if (!track) return;
   renderPianoRoll(pianoRollEl, track, (step, midi, e) => {
+    pushUndo();
     if (e?.shiftKey && track.cells[step].has(midi)) {
       // Shift+click cycles the note length: 1 -> 2 -> 4 -> 8 -> 16 steps -> 1
       const len = track.lengths.get(`${step}:${midi}`) || 1;
@@ -282,7 +317,12 @@ function renderGrid() {
     }
     renderGrid();
   }, -1, (fs, fm, ts, tm) => {
+    pushUndo();
     engine.moveNote(track.id, fs, fm, ts, tm);
+    renderGrid();
+  }, (step, midi, len) => {
+    pushUndo();
+    engine.setNoteLength(track.id, step, midi, len);
     renderGrid();
   });
 }
@@ -291,7 +331,163 @@ function renderAll() {
   renderTabs();
   renderControls();
   renderGrid();
+  renderMixer();
 }
+
+// ---- Mixer ----
+const mixerEl = document.getElementById('mixer');
+let view = 'roll';
+
+function slider(min, max, step, value, onInput, resetTo, cls = '') {
+  const el = document.createElement('input');
+  el.type = 'range';
+  el.min = min;
+  el.max = max;
+  el.step = step;
+  el.value = value;
+  el.className = cls;
+  el.addEventListener('input', () => onInput(Number(el.value)));
+  if (resetTo !== undefined) {
+    el.addEventListener('dblclick', () => {
+      el.value = resetTo;
+      onInput(resetTo);
+    });
+  }
+  return el;
+}
+
+function labeled(text, control) {
+  const wrap = document.createElement('label');
+  wrap.className = 'mx-row';
+  const span = document.createElement('span');
+  span.textContent = text;
+  wrap.append(span, control);
+  return wrap;
+}
+
+function meterEl(id) {
+  const m = document.createElement('div');
+  m.className = 'meter';
+  m.dataset.level = id === undefined ? 'master' : id;
+  m.innerHTML = '<i></i>';
+  return m;
+}
+
+function renderMixer() {
+  mixerEl.innerHTML = '';
+  engine.tracks.forEach((track) => {
+    const strip = document.createElement('div');
+    strip.className = 'strip' + (track.id === activeTrackId ? ' active' : '');
+    const name = document.createElement('div');
+    name.className = 'strip-name';
+    name.textContent = track.name;
+    name.title = INSTRUMENTS[track.instrument]?.label || '';
+    name.addEventListener('click', () => {
+      activeTrackId = track.id;
+      renderAll();
+    });
+    const fader = document.createElement('div');
+    fader.className = 'fader-wrap';
+    fader.append(
+      slider(-40, 6, 1, track.volume, (v) => engine.setVolume(track.id, v), -6, 'fader'),
+      meterEl(track.id)
+    );
+    strip.append(
+      name,
+      labeled('PAN', slider(-1, 1, 0.01, track.pan, (v) => engine.setPan(track.id, v), 0)),
+      labeled('REV', slider(0, 1, 0.01, track.reverb, (v) => engine.setSend(track.id, 'reverb', v), 0)),
+      labeled('DLY', slider(0, 1, 0.01, track.delay, (v) => engine.setSend(track.id, 'delay', v), 0)),
+      muteSoloButtons(track),
+      fader
+    );
+    mixerEl.appendChild(strip);
+  });
+
+  const master = document.createElement('div');
+  master.className = 'strip master';
+  const fader = document.createElement('div');
+  fader.className = 'fader-wrap';
+  fader.append(slider(-40, 6, 1, engine.masterDb, (v) => engine.setMasterVolume(v), 0, 'fader'), meterEl());
+  const label = document.createElement('div');
+  label.className = 'strip-name';
+  label.textContent = 'MASTER';
+  master.append(label, fader);
+  mixerEl.appendChild(master);
+}
+
+function setView(next) {
+  view = next;
+  document.querySelectorAll('.view-tab').forEach((b) => b.classList.toggle('active', b.dataset.view === next));
+  trackControlsEl.hidden = next !== 'roll';
+  pianoRollEl.hidden = next !== 'roll';
+  mixerEl.hidden = next !== 'mixer';
+}
+document.querySelectorAll('.view-tab').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+
+// Level meters: only polled while the mixer is on screen.
+const toFill = (db) => Math.max(0, Math.min(1, (db + 60) / 66));
+(function meterLoop() {
+  if (view === 'mixer') {
+    mixerEl.querySelectorAll('.meter').forEach((m) => {
+      const id = m.dataset.level;
+      const db = engine.getLevel(id === 'master' ? undefined : Number(id));
+      m.firstChild.style.height = `${toFill(db) * 100}%`;
+    });
+  }
+  requestAnimationFrame(meterLoop);
+})();
+
+// ---- Undo / redo (note data only: cells and lengths) ----
+const undoStack = [];
+const redoStack = [];
+const snapshot = () =>
+  engine.tracks.map((t) => ({ id: t.id, cells: t.cells.map((c) => new Set(c)), lengths: new Map(t.lengths) }));
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 100) undoStack.shift();
+  redoStack.length = 0;
+}
+function clearHistory() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+function restore(snap) {
+  for (const s of snap) {
+    const t = engine.tracks.find((x) => x.id === s.id);
+    if (t) {
+      t.cells = s.cells;
+      t.lengths = s.lengths;
+    }
+  }
+  renderGrid();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  restore(undoStack.pop());
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  restore(redoStack.pop());
+}
+document.getElementById('undo-btn').addEventListener('click', undo);
+document.getElementById('redo-btn').addEventListener('click', redo);
+window.addEventListener('keydown', (e) => {
+  const t = e.target.tagName;
+  if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || t === 'BUTTON') return;
+  if (e.ctrlKey || e.metaKey) {
+    if (e.code === 'KeyZ') {
+      e.preventDefault();
+      e.shiftKey ? redo() : undo();
+    } else if (e.code === 'KeyY') {
+      e.preventDefault();
+      redo();
+    }
+  } else if (e.code === 'Enter') {
+    engine.isPlaying() ? stopBtn.click() : playBtn.click();
+  }
+});
 
 playBtn.addEventListener('click', async () => {
   setStatus(engine.isPaused() ? 'Resuming…' : 'Playing…');
@@ -319,6 +515,7 @@ bpmInput.addEventListener('change', () => {
 document.getElementById('add-track').addEventListener('click', addTrack);
 
 document.getElementById('auto-build-btn').addEventListener('click', () => {
+  pushUndo();
   engine.autoBuild({
     root: Number(abRootSelect.value),
     scaleName: abScaleSelect.value,
@@ -372,6 +569,7 @@ loadInput.addEventListener('change', async () => {
   try {
     const text = await file.text();
     const data = parseProjectFile(text);
+    clearHistory();
     engine.stop();
     const firstId = applyProjectToEngine(engine, data, createTrack);
     activeTrackId = firstId;
@@ -391,6 +589,7 @@ loadInput.addEventListener('change', async () => {
 document.getElementById('load-demo-btn').addEventListener('click', () => {
   const demo = DEMOS.find((d) => d.id === demoSelect.value);
   if (!demo) return;
+  clearHistory();
   engine.stop();
   const firstId = applyProjectToEngine(engine, demo.data, createTrack);
   activeTrackId = firstId;
@@ -479,6 +678,7 @@ recBtn.addEventListener('click', async () => {
   if (counting) return;
   const track = getActiveTrack();
   recBtn.classList.add('active');
+  pushUndo();
   if (!engine.isPlaying()) {
     counting = true;
     setStatus('Count-in…');

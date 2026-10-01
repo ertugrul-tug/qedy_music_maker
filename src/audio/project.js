@@ -12,12 +12,17 @@ export function serializeProject(engine, projectName = 'Untitled Project') {
     version: QEDY_VERSION,
     name: projectName,
     bpm: engine.bpm,
+    master: engine.masterDb,
     steps: engine.steps,
     tracks: engine.tracks.map((t) => ({
       name: t.name,
       instrument: t.instrument,
       volume: t.volume,
       muted: t.muted,
+      solo: t.solo,
+      pan: t.pan,
+      reverb: t.reverb,
+      delay: t.delay,
       rangeLow: t.rangeLow,
       rangeHigh: t.rangeHigh,
       cells: t.cells.map((set) => [...set]),
@@ -59,6 +64,7 @@ export function applyProjectToEngine(engine, data, createTrack) {
   [...engine.tracks].forEach((t) => engine.removeTrack(t.id));
 
   engine.setBpm(data.bpm || 120);
+  engine.setMasterVolume(data.master ?? 0);
   const steps = data.steps || data.tracks?.[0]?.cells?.length || DEFAULT_STEPS;
   engine.steps = steps;
 
@@ -69,6 +75,10 @@ export function applyProjectToEngine(engine, data, createTrack) {
       saved.instrument || LEGACY_WAVEFORM_TO_INSTRUMENT[saved.waveform] || DEFAULT_INSTRUMENT;
     track.volume = typeof saved.volume === 'number' ? saved.volume : -6;
     track.muted = !!saved.muted;
+    track.solo = !!saved.solo;
+    track.pan = saved.pan ?? 0;
+    track.reverb = saved.reverb ?? 0;
+    track.delay = saved.delay ?? 0;
     track.rangeLow = saved.rangeLow ?? track.rangeLow;
     track.rangeHigh = saved.rangeHigh ?? track.rangeHigh;
     track.cells = normalizeCells(saved.cells, steps).map((arr) => new Set(arr));

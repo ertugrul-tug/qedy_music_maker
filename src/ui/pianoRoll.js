@@ -9,7 +9,9 @@ function isBlackKey(midi) {
 // Renders a piano-roll grid for a single track into `container`.
 // `track` is the data model; `onToggle(step, midi)` is called on cell click.
 // Grid width is derived from track.cells.length, so loops and longer tracks both just work.
-export function renderPianoRoll(container, track, onToggle, playingStep, onMove) {
+let justResized = false; // swallows the click that follows a resize drag
+
+export function renderPianoRoll(container, track, onToggle, playingStep, onMove, onResize) {
   const { scrollTop, scrollLeft } = container;
   container.innerHTML = '';
   const steps = track.cells.length;
@@ -41,13 +43,18 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove)
       cell.style.gridRow = row + 1;
       cell.style.gridColumn = step + 2;
       cell.dataset.step = step;
-      cell.addEventListener('click', (e) => onToggle(step, midi, e));
+      cell.addEventListener('click', (e) => {
+        if (!justResized) onToggle(step, midi, e);
+      });
       if (active) {
+        cell.dataset.owner = step;
+        cell.dataset.midi = midi;
         // Drag an existing note onto another cell to move it (time and/or pitch).
         cell.draggable = true;
         cell.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', `${step}:${midi}`));
         const len = track.lengths.get(`${step}:${midi}`) || 1;
-        for (let k = 1; k < len && step + k < steps; k++) tails.push([row, step + k]);
+        if (len === 1) cell.classList.add('end');
+        for (let k = 1; k < len && step + k < steps; k++) tails.push([row, step + k, step, midi]);
       }
       cell.addEventListener('dragover', (e) => e.preventDefault());
       cell.addEventListener('drop', (e) => {
@@ -60,9 +67,39 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove)
     }
   }
 
-  for (const [row, step] of tails) {
-    cellAt.get(`${row}:${step}`).classList.add('tail');
+  for (const [row, step, owner, midi] of tails) {
+    if (step === owner + (track.lengths.get(`${owner}:${midi}`) || 1) - 1) cellAt.get(`${row}:${step}`).classList.add('end');
+    const tail = cellAt.get(`${row}:${step}`);
+    tail.classList.add('tail');
+    tail.dataset.owner = owner;
+    tail.dataset.midi = midi;
   }
+  // Drag the right edge of a note to change its length.
+  grid.addEventListener('mousedown', (e) => {
+    const cell = e.target.closest('.cell');
+    if (!cell || cell.dataset.owner === undefined || !onResize) return;
+    if (e.clientX < cell.getBoundingClientRect().right - 6) return;
+    const owner = Number(cell.dataset.owner);
+    const midi = Number(cell.dataset.midi);
+    const len = track.lengths.get(`${owner}:${midi}`) || 1;
+    if (Number(cell.dataset.step) !== owner + len - 1) return;
+    e.preventDefault();
+    let newLen = len;
+    const move = (ev) => {
+      const s = document.elementFromPoint(ev.clientX, ev.clientY)?.dataset?.step;
+      if (s !== undefined) newLen = Math.max(1, Number(s) - owner + 1);
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      justResized = true;
+      setTimeout(() => (justResized = false));
+      if (newLen !== len) onResize(owner, midi, newLen);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+
   container.appendChild(grid);
   // Re-renders happen on every edit: keep the view where it was. First render: start around C5.
   if (container.dataset.scrolled) {

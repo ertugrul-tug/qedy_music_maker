@@ -33,6 +33,10 @@ export function createTrack(name = `Track ${nextTrackId}`, steps = DEFAULT_STEPS
     instrument: DEFAULT_INSTRUMENT,
     volume: -6,
     muted: false,
+    solo: false,
+    pan: 0, // -1 (left) .. 1 (right)
+    reverb: 0, // send levels 0..1 into the shared reverb / delay buses
+    delay: 0,
     // Pitch range used by the random generator (does not restrict manual editing)
     rangeLow: LOW_MIDI,
     rangeHigh: HIGH_MIDI,
@@ -50,6 +54,31 @@ export function buildVoice(instrumentKey) {
   return new Tone.PolySynth(SynthClass, preset.options);
 }
 
+// Shared effect buses; each track feeds them through its own send level.
+function createFx(dest) {
+  return {
+    reverb: new Tone.Reverb({ decay: 3, wet: 1 }).connect(dest),
+    delay: new Tone.FeedbackDelay({ delayTime: '8n.', feedback: 0.35, wet: 1 }).connect(dest),
+  };
+}
+
+// synth -> volume -> panner -> dest, with post-fader sends to the reverb and delay buses.
+function createChannel(track, dest, fx) {
+  const synth = buildVoice(track.instrument);
+  const volume = new Tone.Volume(0);
+  const panner = new Tone.Panner(track.pan);
+  const sendRev = new Tone.Gain(track.reverb).connect(fx.reverb);
+  const sendDel = new Tone.Gain(track.delay).connect(fx.delay);
+  const meter = new Tone.Meter();
+  synth.chain(volume, panner, dest);
+  panner.connect(sendRev);
+  panner.connect(sendDel);
+  panner.connect(meter);
+  return { synth, volume, panner, sendRev, sendDel, meter };
+}
+
+const isAudible = (track, anySolo) => !track.muted && (!anySolo || track.solo);
+
 export class Engine {
   constructor() {
     this.tracks = [];
@@ -61,9 +90,27 @@ export class Engine {
     Tone.Transport.bpm.value = this.bpm;
 
     // All live tracks route through this shared bus so the analyser sees the mixed signal.
-    this.master = new Tone.Gain(1).toDestination();
+    this.masterDb = 0;
+    this.master = new Tone.Gain(1);
+    this.masterVol = new Tone.Volume(0);
+    this.limiter = new Tone.Limiter(-1).toDestination(); // keeps loud mixes from clipping
+    this.master.chain(this.masterVol, this.limiter);
+    this.masterMeter = new Tone.Meter();
+    this.masterVol.connect(this.masterMeter);
     this.analyser = new Tone.Waveform(1024);
     this.master.connect(this.analyser);
+    this.fx = createFx(this.master);
+  }
+
+  setMasterVolume(db) {
+    this.masterDb = db;
+    this.masterVol.volume.value = db;
+  }
+
+  // Current level of a track (or the master bus when trackId is omitted), in dB.
+  getLevel(trackId) {
+    const meter = trackId === undefined ? this.masterMeter : this.instruments.get(trackId)?.meter;
+    return meter ? meter.getValue() : -Infinity;
   }
 
   // Returns the current waveform samples (Float32Array, values roughly -1..1).
@@ -78,18 +125,20 @@ export class Engine {
 
   removeTrack(trackId) {
     this.tracks = this.tracks.filter((t) => t.id !== trackId);
+    this._disposeChannel(trackId);
+    this.applyMix();
+  }
+
+  _disposeChannel(trackId) {
     const inst = this.instruments.get(trackId);
-    if (inst) {
-      inst.synth.dispose();
-      inst.volume.dispose();
-      this.instruments.delete(trackId);
-    }
+    if (!inst) return;
+    Object.values(inst).forEach((node) => node.dispose());
+    this.instruments.delete(trackId);
   }
 
   _buildInstrument(track) {
-    const volume = new Tone.Volume(track.muted ? -Infinity : track.volume).connect(this.master);
-    const synth = buildVoice(track.instrument).connect(volume);
-    this.instruments.set(track.id, { synth, volume });
+    this.instruments.set(track.id, createChannel(track, this.master, this.fx));
+    this.applyMix();
   }
 
   // Swaps a track's synth voice (e.g. Sine Lead -> Bass). Rebuilds the instrument
@@ -97,26 +146,44 @@ export class Engine {
   setInstrument(trackId, instrumentKey) {
     const track = this.tracks.find((t) => t.id === trackId);
     track.instrument = instrumentKey;
-    const inst = this.instruments.get(trackId);
-    if (inst) {
-      inst.synth.dispose();
-      inst.volume.dispose();
-    }
+    this._disposeChannel(trackId);
     this._buildInstrument(track);
   }
 
+  // Pushes volume / mute / solo state to the channels (solo silences every non-soloed track).
+  applyMix() {
+    const anySolo = this.tracks.some((t) => t.solo);
+    for (const track of this.tracks) {
+      const inst = this.instruments.get(track.id);
+      if (inst) inst.volume.volume.value = isAudible(track, anySolo) ? track.volume : -Infinity;
+    }
+  }
+
   setVolume(trackId, db) {
-    const track = this.tracks.find((t) => t.id === trackId);
-    track.volume = db;
-    const inst = this.instruments.get(trackId);
-    if (!track.muted) inst.volume.volume.value = db;
+    this.tracks.find((t) => t.id === trackId).volume = db;
+    this.applyMix();
   }
 
   setMuted(trackId, muted) {
-    const track = this.tracks.find((t) => t.id === trackId);
-    track.muted = muted;
+    this.tracks.find((t) => t.id === trackId).muted = muted;
+    this.applyMix();
+  }
+
+  setSolo(trackId, solo) {
+    this.tracks.find((t) => t.id === trackId).solo = solo;
+    this.applyMix();
+  }
+
+  setPan(trackId, pan) {
+    this.tracks.find((t) => t.id === trackId).pan = pan;
+    this.instruments.get(trackId).panner.pan.value = pan;
+  }
+
+  // bus: 'reverb' | 'delay', amount 0..1
+  setSend(trackId, bus, amount) {
+    this.tracks.find((t) => t.id === trackId)[bus] = amount;
     const inst = this.instruments.get(trackId);
-    inst.volume.volume.value = muted ? -Infinity : track.volume;
+    (bus === 'reverb' ? inst.sendRev : inst.sendDel).gain.value = amount;
   }
 
   setBpm(bpm) {
@@ -293,13 +360,18 @@ export class Engine {
     const stepDuration = 60 / this.bpm / 4; // 16th note duration in seconds
     const totalDuration = stepDuration * this.steps + 1; // +1s tail for release
 
-    const buffer = await Tone.Offline(({ transport }) => {
+    const buffer = await Tone.Offline(async ({ transport }) => {
       transport.bpm.value = this.bpm;
+      const limiter = new Tone.Limiter(-1).toDestination();
+      const out = new Tone.Volume(this.masterDb).connect(limiter);
+      const fx = createFx(out);
+      await fx.reverb.generate();
+      const anySolo = this.tracks.some((t) => t.solo);
       const offlineInstruments = new Map();
       for (const track of this.tracks) {
-        const volume = new Tone.Volume(track.muted ? -Infinity : track.volume).toDestination();
-        const synth = buildVoice(track.instrument).connect(volume);
-        offlineInstruments.set(track.id, synth);
+        const ch = createChannel(track, out, fx);
+        ch.volume.volume.value = isAudible(track, anySolo) ? track.volume : -Infinity;
+        offlineInstruments.set(track.id, ch.synth);
       }
       const steps = Array.from({ length: this.steps }, (_, i) => i);
       const seq = new Tone.Sequence(
