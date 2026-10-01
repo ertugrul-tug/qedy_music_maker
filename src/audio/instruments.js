@@ -150,10 +150,11 @@ Object.assign(INSTRUMENTS, {
 });
 
 // ---- Sampled (real recorded) instruments ----
-// Loaded on demand from public CDNs when a track or the live keyboard uses them (CC-BY 3.0:
+// Loaded on demand from /public/samples when a track or the live keyboard uses them (CC-BY 3.0:
 // Salamander Grand Piano by Alexander Holm, other instruments from nbrosowsky/tonejs-instruments).
-const TONEJS = 'https://nbrosowsky.github.io/tonejs-instruments/samples/';
-const SALAMANDER = 'https://tonejs.github.io/audio/salamander/';
+const SAMPLES = `${import.meta.env?.BASE_URL ?? '/'}samples/`;
+const TONEJS = SAMPLES;
+const SALAMANDER = `${SAMPLES}salamander/`;
 
 // Sample files are named like "As3.mp3" for A#3; a Tone.Sampler pitches the nearest sample to any note.
 function sampled(label, baseUrl, notes, release = 1) {
