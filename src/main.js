@@ -324,6 +324,10 @@ function renderGrid() {
     pushUndo();
     engine.setNoteLength(track.id, step, midi, len);
     renderGrid();
+  }, (step, v, first) => {
+    if (step === null) return renderGrid(); // end of a lane drag: refresh note brightness
+    if (first) pushUndo();
+    engine.setStepVelocity(track.id, step, v);
   });
 }
 
@@ -441,7 +445,7 @@ const toFill = (db) => Math.max(0, Math.min(1, (db + 60) / 66));
 const undoStack = [];
 const redoStack = [];
 const snapshot = () =>
-  engine.tracks.map((t) => ({ id: t.id, cells: t.cells.map((c) => new Set(c)), lengths: new Map(t.lengths) }));
+  engine.tracks.map((t) => ({ id: t.id, cells: t.cells.map((c) => new Set(c)), lengths: new Map(t.lengths), velocities: new Map(t.velocities) }));
 function pushUndo() {
   undoStack.push(snapshot());
   if (undoStack.length > 100) undoStack.shift();
@@ -457,6 +461,7 @@ function restore(snap) {
     if (t) {
       t.cells = s.cells;
       t.lengths = s.lengths;
+      t.velocities = s.velocities;
     }
   }
   renderGrid();
@@ -660,6 +665,7 @@ let lastTake = null;
 
 live.getClip = getActiveTrack;
 document.getElementById('live-loopmode').addEventListener('change', (e) => { live.state.loopMode = e.target.checked; });
+document.getElementById('live-vel').addEventListener('input', (e) => { live.state.velocity = Number(e.target.value); });
 document.getElementById('live-chord').addEventListener('change', (e) => { live.state.chord = e.target.checked; });
 document.getElementById('live-metro').addEventListener('change', (e) => live.setMetronome(e.target.checked));
 
@@ -690,6 +696,7 @@ recBtn.addEventListener('click', async () => {
     track,
     snapshot: track.cells.map((c) => new Set(c)),
     lengths: new Map(track.lengths),
+    velocities: new Map(track.velocities),
   };
   recBtn.textContent = '■';
   setStatus('Recording… play your keys');
@@ -699,6 +706,7 @@ recUndo.addEventListener('click', () => {
   if (!lastTake) return;
   lastTake.track.cells = lastTake.snapshot;
   lastTake.track.lengths = lastTake.lengths;
+  lastTake.track.velocities = lastTake.velocities;
   lastTake = null;
   recUndo.disabled = true;
   renderGrid();
@@ -709,12 +717,14 @@ stopBtn.addEventListener('click', stopRecording);
 const transportSteps = () => Tone.Transport.ticks / (Tone.Transport.PPQ / 4); // position in 16th steps
 
 // Notes are snapped to the chosen grid and written into the armed track's loop.
-live.onNoteOn = (midi) => {
+live.onNoteOn = (midi, vel) => {
   if (!recording || !engine.isPlaying()) return;
   const q = Number(recQuant.value);
   const pos = transportSteps();
   const step = (Math.round(pos / q) * q) % engine.steps;
   recording.track.cells[step].add(midi);
+  if (vel < 1) recording.track.velocities.set(`${step}:${midi}`, vel);
+  else recording.track.velocities.delete(`${step}:${midi}`);
   openNotes.set(midi, { track: recording.track, step, pos });
   if (recording.track.id === activeTrackId) renderGrid();
 };

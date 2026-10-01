@@ -797,3 +797,41 @@ input[type='range'].fader {
 .strip > .fader-wrap {
   flex-shrink: 1;
 }
+
+/* ---------- velocity lane ---------- */
+.piano-roll {
+  grid-template-rows: repeat(var(--pitches), 17px) 56px;
+}
+.vel-label,
+.vel-cell {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #14161b;
+  border-top: 1px solid #000;
+}
+.vel-label {
+  left: 0;
+  z-index: 4;
+  font: 9px var(--mono);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+.vel-cell {
+  display: flex;
+  align-items: flex-end;
+  border-right: 1px solid #1d2027;
+  cursor: ns-resize;
+}
+.vel-cell.bar-start {
+  border-left: 2px solid #4a4f63;
+}
+.vel-cell i {
+  display: block;
+  width: 100%;
+  background: var(--note);
+  opacity: 0.85;
+}

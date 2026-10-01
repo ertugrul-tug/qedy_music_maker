@@ -44,6 +44,8 @@ export function createTrack(name = `Track ${nextTrackId}`, steps = DEFAULT_STEPS
     cells: Array.from({ length: steps }, () => new Set()),
     // Optional note lengths in steps, keyed "step:midi"; a missing key means 1 step.
     lengths: new Map(),
+    // Optional note velocities 0..1, same keys; a missing key means full velocity (1).
+    velocities: new Map(),
   };
   return track;
 }
@@ -212,7 +214,17 @@ export class Engine {
     if (cell.has(midi)) {
       cell.delete(midi);
       track.lengths.delete(`${step}:${midi}`);
+      track.velocities.delete(`${step}:${midi}`);
     } else cell.add(midi);
+  }
+
+  // Sets the velocity of every note at `step` (the velocity lane edits whole steps).
+  setStepVelocity(trackId, step, v) {
+    const track = this.tracks.find((t) => t.id === trackId);
+    for (const midi of track.cells[step]) {
+      if (v < 1) track.velocities.set(`${step}:${midi}`, v);
+      else track.velocities.delete(`${step}:${midi}`);
+    }
   }
 
   setNoteLength(trackId, step, midi, len) {
@@ -225,9 +237,11 @@ export class Engine {
   moveNote(trackId, fromStep, fromMidi, toStep, toMidi) {
     const track = this.tracks.find((t) => t.id === trackId);
     const len = track.lengths.get(`${fromStep}:${fromMidi}`) || 1;
+    const vel = track.velocities.get(`${fromStep}:${fromMidi}`);
     this.toggleNote(trackId, fromStep, fromMidi);
     track.cells[toStep].add(toMidi);
     this.setNoteLength(trackId, toStep, toMidi, len);
+    if (vel !== undefined) track.velocities.set(`${toStep}:${toMidi}`, vel);
   }
 
   setRange(trackId, low, high) {
@@ -241,24 +255,29 @@ export class Engine {
     const track = this.tracks.find((t) => t.id === trackId);
     const n = track.cells.length;
     track.cells = track.cells.map((_, i) => track.cells[(((i - delta) % n) + n) % n]);
-    track.lengths = new Map(
-      [...track.lengths].map(([key, len]) => {
-        const [step, midi] = key.split(':').map(Number);
-        return [`${(((step + delta) % n) + n) % n}:${midi}`, len];
-      })
-    );
+    const remap = (map) =>
+      new Map(
+        [...map].map(([key, value]) => {
+          const [step, midi] = key.split(':').map(Number);
+          return [`${(((step + delta) % n) + n) % n}:${midi}`, value];
+        })
+      );
+    track.lengths = remap(track.lengths);
+    track.velocities = remap(track.velocities);
   }
 
   clearTrack(trackId) {
     const track = this.tracks.find((t) => t.id === trackId);
     track.cells = Array.from({ length: this.steps }, () => new Set());
     track.lengths = new Map();
+    track.velocities = new Map();
   }
 
   // Regenerates one track's note pattern using its own pitch range.
   randomizeTrack(trackId, { root = 0, scaleName = 'major', density = 0.4 } = {}) {
     const track = this.tracks.find((t) => t.id === trackId);
     track.lengths = new Map();
+    track.velocities = new Map();
     track.cells = generatePattern({
       steps: this.steps,
       low: track.rangeLow,
@@ -304,7 +323,8 @@ export class Engine {
           const inst = this.instruments.get(track.id);
           for (const midi of track.cells[step] || []) {
             const len = track.lengths.get(`${step}:${midi}`) || 1;
-            inst.synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time);
+            const vel = track.velocities.get(`${step}:${midi}`) ?? 1;
+            inst.synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time, vel);
           }
         }
         if (this.onStep) {
@@ -380,7 +400,8 @@ export class Engine {
             const synth = offlineInstruments.get(track.id);
             for (const midi of track.cells[step] || []) {
               const len = track.lengths.get(`${step}:${midi}`) || 1;
-              synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time);
+              const vel = track.velocities.get(`${step}:${midi}`) ?? 1;
+              synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time, vel);
             }
           }
         },

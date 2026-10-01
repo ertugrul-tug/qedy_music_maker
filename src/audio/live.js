@@ -23,7 +23,7 @@ export function createLive(engine) {
   const reverb = new Tone.Reverb({ decay: 3, wet: 0.25 }).connect(engine.master);
   let synth = null;
   let instrument = 'strings';
-  const state = { scale: 'chromatic', root: 0, octave: 4, loopMode: false, chord: false };
+  const state = { scale: 'chromatic', root: 0, octave: 4, loopMode: false, chord: false, velocity: 1 };
   const held = new Map(); // code -> midi
   const sustained = new Set(); // midi released while pedal is down
   let pedal = false;
@@ -93,8 +93,8 @@ export function createLive(engine) {
     if (state.chord) extras.set(code, chordFor(code, midi).filter((m) => m !== midi));
     for (const m of tonesOf(code)) {
       if (sustained.delete(m)) release(m);
-      synth.triggerAttack(name(m));
-      onNoteOn(m);
+      synth.triggerAttack(name(m), undefined, state.velocity);
+      onNoteOn(m, state.velocity);
     }
     onChange();
   }
@@ -110,7 +110,8 @@ export function createLive(engine) {
     const seq = new Tone.Sequence((time, step) => {
       for (const m of clip.cells[step]) {
         const len = clip.lengths.get(`${step}:${m}`) || 1;
-        synth.triggerAttackRelease(name(m + shift), (len * 60) / engine.bpm / 4, time);
+        const vel = clip.velocities.get(`${step}:${m}`) ?? 1;
+        synth.triggerAttackRelease(name(m + shift), (len * 60) / engine.bpm / 4, time, vel);
       }
     }, [...Array(clip.cells.length).keys()], '16n');
     seq.start('@16n');
