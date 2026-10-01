@@ -10,6 +10,7 @@ function isBlackKey(midi) {
 // `track` is the data model; `onToggle(step, midi)` is called on cell click.
 // Grid width is derived from track.cells.length, so loops and longer tracks both just work.
 export function renderPianoRoll(container, track, onToggle, playingStep, onMove) {
+  const { scrollTop, scrollLeft } = container;
   container.innerHTML = '';
   const steps = track.cells.length;
   const grid = document.createElement('div');
@@ -63,6 +64,14 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove)
     cellAt.get(`${row}:${step}`).classList.add('tail');
   }
   container.appendChild(grid);
+  // Re-renders happen on every edit: keep the view where it was. First render: start around C5.
+  if (container.dataset.scrolled) {
+    container.scrollTop = scrollTop;
+    container.scrollLeft = scrollLeft;
+  } else {
+    container.scrollTop = (HIGH_MIDI - 84) * 18;
+    container.dataset.scrolled = '1';
+  }
 }
 
 export function updatePlayhead(container, playingStep) {

@@ -418,15 +418,22 @@ Object.entries(RHYTHMS).forEach(([k, r]) => liveRhythm.add(new Option(r.label, k
 const KEY_LABELS = { Semicolon: 'Ş', Quote: 'İ' };
 function renderLiveKeys() {
   const held = live.heldMidis();
-  liveKeysEl.innerHTML = '';
-  live.keyLabels().forEach(({ code, midi }) => {
+  const whites = live.keyLabels();
+  const makeKey = (code, midi, cls) => {
     const el = document.createElement('div');
-    el.className = 'live-key' + (held.has(midi) ? ' down' : '');
-    el.textContent = (KEY_LABELS[code] || code.slice(3)) + ' ' + midiToNoteName(midi);
+    el.className = 'live-key' + cls + (held.has(midi) ? ' down' : '');
+    el.innerHTML = `${KEY_LABELS[code] || code.slice(3)}<small>${midiToNoteName(midi)}</small>`;
+    return el;
+  };
+  liveKeysEl.innerHTML = '';
+  whites.forEach(({ code, midi }) => liveKeysEl.appendChild(makeKey(code, midi, '')));
+  live.blackKeys().forEach(({ code, midi, after }) => {
+    const el = makeKey(code, midi, ' black');
+    el.style.left = `${((after + 1) / whites.length) * 100}%`;
     liveKeysEl.appendChild(el);
   });
   liveKeysEl.classList.toggle('pedal', live.isPedal());
-  document.getElementById('live-octave').textContent = 'Oct ' + live.state.octave;
+  document.getElementById('live-octave').textContent = 'OCT ' + live.state.octave;
 }
 live.onChange = renderLiveKeys;
 // Blur selects after use so keyboard playing (and Space) isn't swallowed by a focused dropdown.
@@ -462,7 +469,7 @@ function stopRecording() {
   lastTake = recording;
   recording = null;
   recBtn.classList.remove('active');
-  recBtn.textContent = '● Rec';
+  recBtn.textContent = '●';
   recUndo.disabled = false;
   setStatus('Take recorded');
 }
@@ -484,7 +491,7 @@ recBtn.addEventListener('click', async () => {
     snapshot: track.cells.map((c) => new Set(c)),
     lengths: new Map(track.lengths),
   };
-  recBtn.textContent = '■ Recording';
+  recBtn.textContent = '■';
   setStatus('Recording… play your keys');
 });
 

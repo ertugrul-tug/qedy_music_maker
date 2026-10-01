@@ -6,6 +6,7 @@ import { SCALES } from './generator.js';
 export const HOME_ROW = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL', 'Semicolon', 'Quote'];
 // Chromatic mode: top row = black keys, as on a piano.
 const BLACK_ROW = { KeyW: 1, KeyE: 3, KeyT: 6, KeyY: 8, KeyU: 10, KeyO: 13, KeyP: 15 };
+const BLACK_AFTER = { KeyW: 0, KeyE: 1, KeyT: 3, KeyY: 4, KeyU: 5, KeyO: 7, KeyP: 8 };
 const WHITE_SEMITONES = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17];
 
 // 16-step drum loops: k = kick, s = snare, h = hat
@@ -207,6 +208,11 @@ export function createLive(engine) {
 
   return {
     state,
+    // Black keys (chromatic mode only); `after` = index of the white key they sit to the right of.
+    blackKeys: () =>
+      state.scale === 'chromatic'
+        ? Object.keys(BLACK_ROW).map((code) => ({ code, midi: noteFor(code), after: BLACK_AFTER[code] }))
+        : [],
     keyLabels: () => HOME_ROW.map((code) => ({ code, midi: noteFor(code) })),
     heldMidis: () => new Set(held.values()),
     isPedal: () => pedal,
