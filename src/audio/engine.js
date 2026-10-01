@@ -38,7 +38,7 @@ export function createTrack(name = `Track ${nextTrackId}`, steps = DEFAULT_STEPS
   return track;
 }
 
-function buildVoice(instrumentKey) {
+export function buildVoice(instrumentKey) {
   const preset = INSTRUMENTS[instrumentKey] || INSTRUMENTS[DEFAULT_INSTRUMENT];
   const SynthClass = SYNTH_CLASSES[preset.synth] || Tone.Synth;
   return new Tone.PolySynth(SynthClass, preset.options);
@@ -144,6 +144,13 @@ export class Engine {
     const track = this.tracks.find((t) => t.id === trackId);
     track.rangeLow = Math.min(low, high);
     track.rangeHigh = Math.max(low, high);
+  }
+
+  // Rotates a track's notes by `delta` steps (wraps around the loop).
+  shiftTrack(trackId, delta) {
+    const track = this.tracks.find((t) => t.id === trackId);
+    const n = track.cells.length;
+    track.cells = track.cells.map((_, i) => track.cells[(((i - delta) % n) + n) % n]);
   }
 
   clearTrack(trackId) {

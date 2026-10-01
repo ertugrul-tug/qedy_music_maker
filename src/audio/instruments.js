@@ -96,3 +96,33 @@ export const LEGACY_WAVEFORM_TO_INSTRUMENT = {
   sawtooth: 'sawLead',
   triangle: 'trianglePad',
 };
+
+// Orchestral-style presets for the live keyboard (synth approximations, no samples).
+Object.assign(INSTRUMENTS, {
+  strings: {
+    label: 'Orchestra Strings',
+    synth: 'Synth',
+    options: {
+      oscillator: { type: 'fatsawtooth', count: 3, spread: 25 },
+      envelope: { attack: 0.35, decay: 0.3, sustain: 0.8, release: 1.6 },
+    },
+  },
+  brass: {
+    label: 'Orchestra Brass',
+    synth: 'Synth',
+    options: {
+      oscillator: { type: 'fatsawtooth', count: 2, spread: 12 },
+      envelope: { attack: 0.08, decay: 0.2, sustain: 0.7, release: 0.5 },
+    },
+  },
+  choir: {
+    label: 'Choir Pad',
+    synth: 'AMSynth',
+    options: {
+      harmonicity: 1.5,
+      envelope: { attack: 0.5, decay: 0.3, sustain: 0.9, release: 2 },
+      modulationEnvelope: { attack: 0.6, decay: 0.2, sustain: 0.8, release: 1.5 },
+    },
+  },
+});
+INSTRUMENT_KEYS.push('strings', 'brass', 'choir');

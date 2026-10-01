@@ -7,6 +7,8 @@ import { audioBufferToWav, transcodeWav, downloadBlob } from './audio/export.js'
 import { ROOT_NAMES } from './audio/generator.js';
 import { saveProject, parseProjectFile, applyProjectToEngine } from './audio/project.js';
 import { DEMOS } from './audio/demoLibrary.js';
+import * as Tone from 'tone';
+import { createLive, RHYTHMS } from './audio/live.js';
 
 const engine = new Engine();
 let activeTrackId = null;
@@ -240,12 +242,27 @@ function renderControls() {
     renderAll();
   });
 
+  const shiftBtns = [['⏮', -16, 'Move 1 bar earlier'], ['◀', -1, 'Move 1 step earlier'], ['▶', 1, 'Move 1 step later'], ['⏭', 16, 'Move 1 bar later']].map(
+    ([label, delta, title]) => {
+      const b = document.createElement('button');
+      b.className = 'btn small';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => {
+        engine.shiftTrack(track.id, delta);
+        renderGrid();
+      });
+      return b;
+    }
+  );
+
   trackControlsEl.append(
     nameInput,
     instrumentSelect,
     volLabel,
     rangeLabel,
     muteBtn,
+    ...shiftBtns,
     randomizeBtn,
     clearBtn,
     removeBtn
@@ -374,6 +391,102 @@ document.getElementById('load-demo-btn').addEventListener('click', () => {
   renderAll();
   setStatus(`Loaded demo: ${demo.label}`);
 });
+
+// ---- Live keyboard ----
+const live = createLive(engine);
+const liveKeysEl = document.getElementById('live-keys');
+const liveInstrument = document.getElementById('live-instrument');
+const liveRoot = document.getElementById('live-root');
+const liveScale = document.getElementById('live-scale');
+const liveRhythm = document.getElementById('live-rhythm');
+const liveDrums = document.getElementById('live-drums');
+
+INSTRUMENT_KEYS.forEach((k) => liveInstrument.add(new Option(INSTRUMENTS[k].label, k)));
+liveInstrument.value = 'strings';
+ROOT_NAMES.forEach((n, i) => liveRoot.add(new Option(n, String(i))));
+Object.entries(RHYTHMS).forEach(([k, r]) => liveRhythm.add(new Option(r.label, k)));
+
+const KEY_LABELS = { Semicolon: 'Ş', Quote: 'İ' };
+function renderLiveKeys() {
+  const held = live.heldMidis();
+  liveKeysEl.innerHTML = '';
+  live.keyLabels().forEach(({ code, midi }) => {
+    const el = document.createElement('div');
+    el.className = 'live-key' + (held.has(midi) ? ' down' : '');
+    el.textContent = (KEY_LABELS[code] || code.slice(3)) + ' ' + midiToNoteName(midi);
+    liveKeysEl.appendChild(el);
+  });
+  liveKeysEl.classList.toggle('pedal', live.isPedal());
+  document.getElementById('live-octave').textContent = 'Oct ' + live.state.octave;
+}
+live.onChange = renderLiveKeys;
+// Blur selects after use so keyboard playing (and Space) isn't swallowed by a focused dropdown.
+[liveInstrument, liveRoot, liveScale, liveRhythm].forEach((el) => el.addEventListener('change', () => el.blur()));
+liveInstrument.addEventListener('change', () => live.setInstrument(liveInstrument.value));
+liveRoot.addEventListener('change', () => { live.state.root = Number(liveRoot.value); renderLiveKeys(); });
+liveScale.addEventListener('change', () => { live.state.scale = liveScale.value; renderLiveKeys(); });
+liveRhythm.addEventListener('change', () => live.setRhythm(liveRhythm.value));
+liveDrums.addEventListener('click', async () => {
+  if (live.isDrumming()) live.stopDrums();
+  else await live.startDrums();
+  liveDrums.textContent = live.isDrumming() ? '■ Drums' : '▶ Drums';
+  liveDrums.blur();
+});
+renderLiveKeys();
+
+// ---- Recording / key-loop ----
+const recBtn = document.getElementById('rec-btn');
+const recUndo = document.getElementById('rec-undo');
+const recQuant = document.getElementById('rec-quant');
+let recording = null; // { track, snapshot }
+let lastTake = null;
+
+live.getClip = getActiveTrack;
+document.getElementById('live-loopmode').addEventListener('change', (e) => { live.state.loopMode = e.target.checked; });
+document.getElementById('live-metro').addEventListener('change', (e) => live.setMetronome(e.target.checked));
+
+function stopRecording() {
+  if (!recording) return;
+  lastTake = recording;
+  recording = null;
+  recBtn.classList.remove('active');
+  recBtn.textContent = '● Rec';
+  recUndo.disabled = false;
+  setStatus('Take recorded');
+}
+
+recBtn.addEventListener('click', async () => {
+  if (recording) return stopRecording();
+  const track = getActiveTrack();
+  recording = { track, snapshot: track.cells.map((c) => new Set(c)) };
+  recBtn.classList.add('active');
+  recBtn.textContent = '■ Recording';
+  if (!engine.isPlaying()) playBtn.click();
+  setStatus('Recording… play your keys');
+});
+
+recUndo.addEventListener('click', () => {
+  if (!lastTake) return;
+  lastTake.track.cells = lastTake.snapshot;
+  lastTake = null;
+  recUndo.disabled = true;
+  renderGrid();
+});
+
+stopBtn.addEventListener('click', stopRecording);
+
+// Notes are snapped to the chosen grid and written into the armed track's loop.
+live.onNoteOn = (midi) => {
+  if (!recording || !engine.isPlaying()) return;
+  const q = Number(recQuant.value);
+  const pos = Tone.Transport.ticks / (Tone.Transport.PPQ / 4); // current position in 16th steps
+  const step = (Math.round(pos / q) * q) % engine.steps;
+  recording.track.cells[step].add(midi);
+  if (recording.track.id === activeTrackId) renderGrid();
+};
+
+// Buttons keep focus after a click, and Space would then re-click them; the keyboard is for playing.
+document.addEventListener('click', (e) => e.target.closest('button')?.blur());
 
 syncLengthSelect();
 addTrack();

@@ -104,6 +104,40 @@
             <button id="auto-build-btn" class="btn primary">🎲 Auto Build All</button>
           </section>
 
+          <section class="live-panel">
+            <strong>Live Keyboard <span id="live-octave"></span></strong>
+            <div class="transport-row">
+              <select id="live-instrument"></select>
+              <select id="live-root"></select>
+            </div>
+            <select id="live-scale">
+              <option value="chromatic">Chromatic (piano)</option>
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+              <option value="pentatonicMajor">Pentatonic Major</option>
+              <option value="pentatonicMinor">Pentatonic Minor</option>
+            </select>
+            <div id="live-keys" class="live-keys"></div>
+            <p class="demo-description">A S D F G H J K L Ş İ = notes · W E T Y U O P = black keys · Z/X = octave · Space = sustain</p>
+            <div class="transport-row">
+              <button id="rec-btn" class="btn small">● Rec</button>
+              <button id="rec-undo" class="btn small" disabled>↶ Undo take</button>
+              <select id="rec-quant" title="Quantize">
+                <option value="1">Snap 1/16</option>
+                <option value="2">Snap 1/8</option>
+                <option value="4">Snap 1/4</option>
+              </select>
+            </div>
+            <div class="transport-row">
+              <label class="checkbox-label"><input id="live-loopmode" type="checkbox" /> Key-loop (hold key = loop clip)</label>
+              <label class="checkbox-label"><input id="live-metro" type="checkbox" /> Metronome</label>
+            </div>
+            <div class="transport-row">
+              <select id="live-rhythm"></select>
+              <button id="live-drums" class="btn small">▶ Drums</button>
+            </div>
+          </section>
+
           <section class="scope-panel">
             <canvas id="oscilloscope" width="400" height="100"></canvas>
           </section>
