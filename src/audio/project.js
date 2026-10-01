@@ -13,6 +13,7 @@ export function serializeProject(engine, projectName = 'Untitled Project') {
     name: projectName,
     bpm: engine.bpm,
     master: engine.masterDb,
+    swing: engine.swing,
     steps: engine.steps,
     tracks: engine.tracks.map((t) => ({
       name: t.name,
@@ -66,6 +67,7 @@ export function applyProjectToEngine(engine, data, createTrack) {
 
   engine.setBpm(data.bpm || 120);
   engine.setMasterVolume(data.master ?? 0);
+  engine.setSwing(data.swing ?? 0);
   const steps = data.steps || data.tracks?.[0]?.cells?.length || DEFAULT_STEPS;
   engine.steps = steps;
 

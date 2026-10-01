@@ -5,7 +5,7 @@ import { renderPianoRoll, updatePlayhead } from './ui/pianoRoll.js';
 import { startOscilloscopeLoop } from './ui/oscilloscope.js';
 import { audioBufferToWav, transcodeWav, downloadBlob } from './audio/export.js';
 import { ROOT_NAMES } from './audio/generator.js';
-import { saveProject, parseProjectFile, applyProjectToEngine } from './audio/project.js';
+import { saveProject, serializeProject, parseProjectFile, applyProjectToEngine } from './audio/project.js';
 import { DEMOS } from './audio/demoLibrary.js';
 import * as Tone from 'tone';
 import { createLive, RHYTHMS } from './audio/live.js';
@@ -290,6 +290,21 @@ function renderControls() {
     }
   );
 
+  const transposeBtns = [['♭', -1, 'Transpose down a semitone'], ['♯', 1, 'Transpose up a semitone'], ['8vb', -12, 'Down an octave'], ['8va', 12, 'Up an octave']].map(
+    ([label, semis, title]) => {
+      const b = document.createElement('button');
+      b.className = 'btn small';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => {
+        pushUndo();
+        engine.transposeTrack(track.id, semis);
+        renderGrid();
+      });
+      return b;
+    }
+  );
+
   trackControlsEl.append(
     nameInput,
     instrumentSelect,
@@ -297,6 +312,7 @@ function renderControls() {
     rangeLabel,
     muteBtn,
     ...shiftBtns,
+    ...transposeBtns,
     randomizeBtn,
     clearBtn,
     removeBtn
@@ -328,6 +344,8 @@ function renderGrid() {
     if (step === null) return renderGrid(); // end of a lane drag: refresh note brightness
     if (first) pushUndo();
     engine.setStepVelocity(track.id, step, v);
+  }, (step) => {
+    if (engine.isPlaying() || engine.isPaused()) Tone.Transport.ticks = step * (Tone.Transport.PPQ / 4);
   });
 }
 
@@ -529,6 +547,7 @@ document.getElementById('auto-build-btn').addEventListener('click', () => {
     randomizeTempo: abTempoCheckbox.checked,
   });
   bpmInput.value = String(engine.bpm);
+  syncSwing();
   renderAll();
   setStatus('Auto-built new loop');
 });
@@ -579,6 +598,7 @@ loadInput.addEventListener('change', async () => {
     const firstId = applyProjectToEngine(engine, data, createTrack);
     activeTrackId = firstId;
     bpmInput.value = String(engine.bpm);
+  syncSwing();
     projectNameInput.value = data.name || file.name.replace(/\.qedy$/i, '');
     syncLengthSelect();
     renderAll();
@@ -599,6 +619,7 @@ document.getElementById('load-demo-btn').addEventListener('click', () => {
   const firstId = applyProjectToEngine(engine, demo.data, createTrack);
   activeTrackId = firstId;
   bpmInput.value = String(engine.bpm);
+  syncSwing();
   projectNameInput.value = demo.label;
   syncLengthSelect();
   renderAll();
@@ -743,5 +764,74 @@ live.onNoteOff = (midi) => {
 // Buttons keep focus after a click, and Space would then re-click them; the keyboard is for playing.
 document.addEventListener('click', (e) => e.target.closest('button')?.blur());
 
+// ---- Swing, rhythm -> tracks, MIDI ----
+const swingInput = document.getElementById('swing-input');
+function syncSwing() {
+  swingInput.value = String(Math.round(engine.swing * 100));
+}
+swingInput.addEventListener('change', () => {
+  engine.setSwing(Math.min(100, Math.max(0, Number(swingInput.value) || 0)) / 100);
+  syncSwing();
+});
+
+document.getElementById('midi-btn').addEventListener('click', () => live.initMidi(setStatus));
+
+// Writes the selected drum rhythm into Kick / Snare / Hat tracks, repeated across the whole loop.
+document.getElementById('rhythm-to-tracks').addEventListener('click', () => {
+  const r = RHYTHMS[liveRhythm.value];
+  pushUndo();
+  [
+    ['Kick', 'kick', 36, r.k, -4],
+    ['Snare', 'snareDrum', 50, r.s, -8],
+    ['Hat', 'hat', 84, r.h, -18],
+  ].forEach(([name, instrument, midi, pattern, volume]) => {
+    const track = createTrack(`${name} (${r.label})`, engine.steps);
+    track.instrument = instrument;
+    track.volume = volume;
+    engine.addTrack(track);
+    for (let i = 0; i < engine.steps; i++) {
+      if (pattern[i % 16] !== 'x') continue;
+      track.cells[i].add(midi);
+      if (name === 'Hat' && i % 4) track.velocities.set(`${i}:${midi}`, 0.65); // off-beat hats softer
+    }
+    activeTrackId = track.id;
+  });
+  renderAll();
+  setStatus(`Added ${r.label} drum tracks`);
+});
+
+// ---- Autosave: the project is kept in localStorage and restored on the next visit ----
+const AUTOSAVE_KEY = 'qedy-autosave';
+let lastAutosave = '';
+setInterval(() => {
+  try {
+    const json = JSON.stringify(serializeProject(engine, projectNameInput.value));
+    if (json === lastAutosave) return;
+    localStorage.setItem(AUTOSAVE_KEY, json);
+    lastAutosave = json;
+  } catch {
+    // storage full or unavailable: autosave is best-effort
+  }
+}, 3000);
+
+let restored = false;
+try {
+  const raw = localStorage.getItem(AUTOSAVE_KEY);
+  if (raw) {
+    const data = parseProjectFile(raw);
+    activeTrackId = applyProjectToEngine(engine, data, createTrack);
+    bpmInput.value = String(engine.bpm);
+    syncSwing();
+    projectNameInput.value = data.name || projectNameInput.value;
+    restored = engine.tracks.length > 0;
+    if (restored) setStatus('Restored your last session');
+  }
+} catch (err) {
+  console.warn('Autosave restore failed', err);
+}
 syncLengthSelect();
-addTrack();
+if (restored) renderAll();
+else {
+  [...engine.tracks].forEach((t) => engine.removeTrack(t.id));
+  addTrack();
+}

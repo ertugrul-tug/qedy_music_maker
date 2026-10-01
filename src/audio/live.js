@@ -54,6 +54,7 @@ export function createLive(engine) {
 
   // midi note for a key code under the current scale/octave, or null
   function noteFor(code) {
+    if (code.startsWith('midi:')) return Number(code.slice(5)); // hardware MIDI key: raw note
     const base = 12 * (state.octave + 1) + state.root;
     const white = HOME_ROW.indexOf(code);
     if (state.scale === 'chromatic') {
@@ -85,7 +86,7 @@ export function createLive(engine) {
     onNoteOff(midi);
   }
 
-  function noteOn(code) {
+  function noteOn(code, vel = state.velocity) {
     const midi = noteFor(code);
     if (midi === null || held.has(code)) return;
     if (state.loopMode && startLoop(code, midi)) return;
@@ -93,8 +94,8 @@ export function createLive(engine) {
     if (state.chord) extras.set(code, chordFor(code, midi).filter((m) => m !== midi));
     for (const m of tonesOf(code)) {
       if (sustained.delete(m)) release(m);
-      synth.triggerAttack(name(m), undefined, state.velocity);
-      onNoteOn(m, state.velocity);
+      synth.triggerAttack(name(m), undefined, vel);
+      onNoteOn(m, vel);
     }
     onChange();
   }
@@ -207,7 +208,39 @@ export function createLive(engine) {
     Tone.Transport.start();
   }
 
+  // Hardware MIDI keyboard: note on/off with real velocity, and the sustain pedal (CC 64).
+  function handleMidi({ data: [status, d1, d2] }) {
+    const cmd = status & 0xf0;
+    if (cmd === 0x90 && d2 > 0) {
+      Tone.start();
+      noteOn(`midi:${d1}`, Math.max(0.05, d2 / 127));
+    } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) noteOff(`midi:${d1}`);
+    else if (cmd === 0xb0 && d1 === 64) {
+      setPedal(d2 >= 64);
+      onChange();
+    }
+  }
+
+  async function initMidi(report) {
+    if (!navigator.requestMIDIAccess) return report('MIDI is not supported in this browser');
+    try {
+      const access = await navigator.requestMIDIAccess();
+      const hook = () => {
+        const names = [...access.inputs.values()].map((input) => {
+          input.onmidimessage = handleMidi;
+          return input.name;
+        });
+        report(names.length ? `MIDI: ${names.join(', ')}` : 'No MIDI device found');
+      };
+      access.onstatechange = hook;
+      hook();
+    } catch {
+      report('MIDI access was denied');
+    }
+  }
+
   return {
+    initMidi,
     state,
     // Black keys (chromatic mode only); `after` = index of the white key they sit to the right of.
     blackKeys: () =>

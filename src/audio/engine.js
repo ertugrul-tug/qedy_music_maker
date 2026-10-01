@@ -93,6 +93,7 @@ export class Engine {
 
     // All live tracks route through this shared bus so the analyser sees the mixed signal.
     this.masterDb = 0;
+    this.swing = 0; // 0..1, delays every off-beat 16th
     this.master = new Tone.Gain(1);
     this.masterVol = new Tone.Volume(0);
     this.limiter = new Tone.Limiter(-1).toDestination(); // keeps loud mixes from clipping
@@ -102,6 +103,27 @@ export class Engine {
     this.analyser = new Tone.Waveform(1024);
     this.master.connect(this.analyser);
     this.fx = createFx(this.master);
+  }
+
+  setSwing(amount) {
+    this.swing = amount;
+    Tone.Transport.swing = amount;
+    Tone.Transport.swingSubdivision = '16n';
+  }
+
+  // Shifts every note of a track by `semitones`.
+  transposeTrack(trackId, semitones) {
+    const track = this.tracks.find((t) => t.id === trackId);
+    const remap = (map) =>
+      new Map(
+        [...map].map(([key, value]) => {
+          const [step, midi] = key.split(':').map(Number);
+          return [`${step}:${midi + semitones}`, value];
+        })
+      );
+    track.cells = track.cells.map((set) => new Set([...set].map((m) => m + semitones)));
+    track.lengths = remap(track.lengths);
+    track.velocities = remap(track.velocities);
   }
 
   setMasterVolume(db) {
@@ -382,6 +404,8 @@ export class Engine {
 
     const buffer = await Tone.Offline(async ({ transport }) => {
       transport.bpm.value = this.bpm;
+      transport.swing = this.swing;
+      transport.swingSubdivision = '16n';
       const limiter = new Tone.Limiter(-1).toDestination();
       const out = new Tone.Volume(this.masterDb).connect(limiter);
       const fx = createFx(out);

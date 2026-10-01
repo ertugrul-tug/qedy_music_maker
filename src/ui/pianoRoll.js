@@ -11,7 +11,7 @@ function isBlackKey(midi) {
 // Grid width is derived from track.cells.length, so loops and longer tracks both just work.
 let justResized = false; // swallows the click that follows a resize drag
 
-export function renderPianoRoll(container, track, onToggle, playingStep, onMove, onResize, onVelocity) {
+export function renderPianoRoll(container, track, onToggle, playingStep, onMove, onResize, onVelocity, onSeek) {
   const { scrollTop, scrollLeft } = container;
   container.innerHTML = '';
   const steps = track.cells.length;
@@ -22,6 +22,21 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove,
   const velOf = (step, midi) => track.velocities.get(`${step}:${midi}`) ?? 1;
 
   const cellAt = new Map();
+  // Ruler: bar numbers; click a step to jump the playhead there.
+  const corner = document.createElement('div');
+  corner.className = 'ruler-corner';
+  corner.style.gridRow = 1;
+  corner.style.gridColumn = 1;
+  grid.appendChild(corner);
+  for (let step = 0; step < steps; step++) {
+    const r = document.createElement('div');
+    r.className = 'ruler-cell' + (step % 16 === 0 ? ' bar-start' : step % 4 === 0 ? ' beat-start' : '');
+    r.textContent = step % 16 === 0 ? String(step / 16 + 1) : '';
+    r.style.gridRow = 1;
+    r.style.gridColumn = step + 2;
+    r.addEventListener('click', () => onSeek && onSeek(step));
+    grid.appendChild(r);
+  }
   const tails = []; // [row, step] cells covered by a long note's tail
   for (let row = 0; row < PITCH_COUNT; row++) {
     const midi = HIGH_MIDI - row;
@@ -29,7 +44,7 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove,
     const keyLabel = document.createElement('div');
     keyLabel.className = 'key-label' + (isBlackKey(midi) ? ' black' : '') + (outOfRange ? ' out-of-range' : '');
     keyLabel.textContent = midiToNoteName(midi);
-    keyLabel.style.gridRow = row + 1;
+    keyLabel.style.gridRow = row + 2;
     keyLabel.style.gridColumn = 1;
     grid.appendChild(keyLabel);
 
@@ -44,7 +59,7 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove,
         cell.style.opacity = 0.4 + 0.6 * velOf(step, midi); // louder notes are brighter
       }
       if (step === playingStep) cell.classList.add('playing');
-      cell.style.gridRow = row + 1;
+      cell.style.gridRow = row + 2;
       cell.style.gridColumn = step + 2;
       cell.dataset.step = step;
       cell.addEventListener('click', (e) => {
@@ -82,14 +97,14 @@ export function renderPianoRoll(container, track, onToggle, playingStep, onMove,
   const laneLabel = document.createElement('div');
   laneLabel.className = 'vel-label';
   laneLabel.textContent = 'VEL';
-  laneLabel.style.gridRow = PITCH_COUNT + 1;
+  laneLabel.style.gridRow = PITCH_COUNT + 2;
   laneLabel.style.gridColumn = 1;
   grid.appendChild(laneLabel);
   const bars = [];
   for (let step = 0; step < steps; step++) {
     const lane = document.createElement('div');
     lane.className = 'vel-cell' + (step % 16 === 0 ? ' bar-start' : '');
-    lane.style.gridRow = PITCH_COUNT + 1;
+    lane.style.gridRow = PITCH_COUNT + 2;
     lane.style.gridColumn = step + 2;
     lane.dataset.velStep = step;
     const bar = document.createElement('i');

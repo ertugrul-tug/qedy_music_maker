@@ -125,4 +125,27 @@ Object.assign(INSTRUMENTS, {
     },
   },
 });
-INSTRUMENT_KEYS.push('strings', 'brass', 'choir');
+Object.assign(INSTRUMENTS, {
+  kick: {
+    label: 'Drum Kick',
+    synth: 'MembraneSynth',
+    options: { pitchDecay: 0.04, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.5 } },
+  },
+  snareDrum: {
+    label: 'Drum Snare',
+    synth: 'MembraneSynth',
+    options: { pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.1 } },
+  },
+  hat: {
+    label: 'Drum Hat',
+    synth: 'MetalSynth',
+    options: {
+      harmonicity: 5.1,
+      modulationIndex: 32,
+      resonance: 7000,
+      octaves: 1.5,
+      envelope: { attack: 0.001, decay: 0.06, release: 0.02 },
+    },
+  },
+});
+INSTRUMENT_KEYS.push('strings', 'brass', 'choir', 'kick', 'snareDrum', 'hat');

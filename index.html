@@ -33,6 +33,10 @@
               <option value="512">32 bars</option>
             </select>
           </label>
+          <label class="lcd">
+            <span>SWING %</span>
+            <input id="swing-input" type="number" min="0" max="100" step="5" value="0" />
+          </label>
           <label class="lcd wide">
             <span>PROJECT</span>
             <input id="project-name-input" type="text" value="Untitled Project" />
@@ -135,6 +139,7 @@
         <div class="dock-col">
           <h2>LIVE <span id="live-octave"></span></h2>
           <select id="live-instrument" title="Instrument"></select>
+          <button id="midi-btn" class="btn small" title="Use a MIDI keyboard (note velocity and sustain pedal work)">🎹 Connect MIDI</button>
           <div class="transport-row">
             <select id="live-root" title="Root note"></select>
             <select id="live-scale" title="Scale">
@@ -180,6 +185,7 @@
           <h2>RHYTHM</h2>
           <select id="live-rhythm"></select>
           <button id="live-drums" class="btn small">▶ Drums</button>
+          <button id="rhythm-to-tracks" class="btn small" title="Write this rhythm into Kick / Snare / Hat tracks so it plays with the song and exports">→ Tracks</button>
         </div>
       </footer>
     </div>

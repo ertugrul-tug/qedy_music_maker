@@ -835,3 +835,38 @@ input[type='range'].fader {
   background: var(--note);
   opacity: 0.85;
 }
+
+/* ---------- ruler ---------- */
+.piano-roll {
+  grid-template-rows: 20px repeat(var(--pitches), 17px) 56px;
+}
+.ruler-cell,
+.ruler-corner {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #14161b;
+  border-bottom: 1px solid #000;
+}
+.ruler-corner {
+  left: 0;
+  z-index: 5;
+}
+.ruler-cell {
+  font: 600 10px var(--mono);
+  color: var(--text-h);
+  padding-left: 3px;
+  line-height: 19px;
+  cursor: pointer;
+  overflow: visible;
+  white-space: nowrap;
+}
+.ruler-cell:hover {
+  background: #232733;
+}
+.ruler-cell.bar-start {
+  border-left: 2px solid #4a4f63;
+}
+.ruler-cell.beat-start {
+  border-left: 1px solid #343846;
+}
