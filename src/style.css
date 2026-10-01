@@ -874,3 +874,62 @@ input[type='range'].fader {
 .demo-description a {
   color: var(--accent);
 }
+
+/* ---------- playhead, zoom, layering (piano roll is built from auto-placed cells) ---------- */
+.piano-roll {
+  grid-template-columns: 56px repeat(var(--steps), var(--cw, 24px));
+  position: relative;
+}
+.key-label {
+  z-index: 4;
+}
+.ruler-cell,
+.vel-cell {
+  z-index: 2;
+}
+.ruler-corner,
+.vel-label {
+  z-index: 5;
+}
+.playhead {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+  z-index: 3;
+  pointer-events: none;
+  display: none;
+}
+.lcd output {
+  font: 600 15px var(--mono);
+  color: var(--lcd);
+}
+.view-tabs .zoom {
+  width: 90px;
+  margin: 0 4px 3px 8px;
+}
+.view-tabs .checkbox-label {
+  margin-bottom: 3px;
+}
+
+/* Below this width the layout would be clipped; let the page scroll instead. */
+@media (min-width: 901px) {
+  html,
+  body {
+    overflow-x: auto;
+  }
+  #app {
+    min-width: 1000px;
+  }
+  .topbar {
+    flex-wrap: wrap;
+  }
+}
+
+/* Own compositor layer: scrolling a huge grid no longer repaints every cell. */
+.piano-roll {
+  will-change: transform;
+}

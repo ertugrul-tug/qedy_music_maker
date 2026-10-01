@@ -290,7 +290,7 @@ export class Engine {
     }
     // The built sequence's step count is fixed at build time; force a rebuild on next play().
     if (this.sequence) {
-      this.sequence.stop();
+      this.sequence.stop(0); // explicit time: the transport clock can read a tiny negative value after an offset start
       this.sequence.dispose();
       this.sequence = null;
     }
@@ -424,7 +424,8 @@ export class Engine {
     );
   }
 
-  async play() {
+  // `startStep` only applies when starting from a stop (not when resuming a pause).
+  async play(startStep = 0) {
     await Tone.start();
     // Resuming from pause: keep the existing sequence so playback continues
     // from where it left off instead of jumping back to step 0.
@@ -432,7 +433,8 @@ export class Engine {
       this._buildSequence();
       this.sequence.start(0);
     }
-    Tone.Transport.start();
+    const offset = Tone.Transport.state === 'stopped' && startStep ? (startStep * 60) / this.bpm / 4 : undefined;
+    Tone.Transport.start(undefined, offset);
   }
 
   // Halts playback but keeps the current position, so play() resumes from here.
@@ -448,7 +450,7 @@ export class Engine {
     Tone.Transport.stop();
     Tone.Draw.cancel();
     if (this.sequence) {
-      this.sequence.stop();
+      this.sequence.stop(0); // explicit time: the transport clock can read a tiny negative value after an offset start
       this.sequence.dispose();
       this.sequence = null;
     }

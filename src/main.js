@@ -1,7 +1,7 @@
 import './style.css';
 import { Engine, createTrack, GRID_LOW as LOW_MIDI, GRID_HIGH as HIGH_MIDI, midiToNoteName } from './audio/engine.js';
 import { INSTRUMENTS, INSTRUMENT_KEYS } from './audio/instruments.js';
-import { renderPianoRoll, updatePlayhead } from './ui/pianoRoll.js';
+import { renderPianoRoll, setPlayhead, hidePlayhead, setZoom } from './ui/pianoRoll.js';
 import { startOscilloscopeLoop } from './ui/oscilloscope.js';
 import { audioBufferToWav, transcodeWav, downloadBlob } from './audio/export.js';
 import { ROOT_NAMES } from './audio/generator.js';
@@ -11,6 +11,7 @@ import * as Tone from 'tone';
 import { createLive, RHYTHMS } from './audio/live.js';
 
 const engine = new Engine();
+let startStep = 0; // where the next Play begins (set by clicking the ruler while stopped)
 engine.onSampleStatus = (msg) => setStatus(msg);
 let activeTrackId = null;
 
@@ -112,7 +113,7 @@ function syncLengthSelect() {
     const opt = document.createElement('option');
     opt.className = 'custom-length';
     opt.value = value;
-    opt.textContent = `${engine.steps} steps (custom)`;
+    opt.textContent = `${engine.steps} steps`;
     lengthSelect.appendChild(opt);
   }
   lengthSelect.value = value;
@@ -347,6 +348,12 @@ function renderGrid() {
     engine.setStepVelocity(track.id, step, v);
   }, (step) => {
     if (engine.isPlaying() || engine.isPaused()) Tone.Transport.ticks = step * (Tone.Transport.PPQ / 4);
+    else {
+      // Stopped: remember the spot, the next Play starts there.
+      startStep = step;
+      setPlayhead(pianoRollEl, step, false);
+      posEl.textContent = `${Math.floor(step / 16) + 1}.${Math.floor((step % 16) / 4) + 1}.1`;
+    }
   });
 }
 
@@ -460,6 +467,27 @@ const toFill = (db) => Math.max(0, Math.min(1, (db + 60) / 66));
   requestAnimationFrame(meterLoop);
 })();
 
+// ---- Playhead: a single element moved every frame from the transport position ----
+const followToggle = document.getElementById('follow-toggle');
+const zoomInput = document.getElementById('zoom-input');
+const posEl = document.getElementById('pos-display');
+zoomInput.addEventListener('input', () => setZoom(pianoRollEl, Number(zoomInput.value)));
+let headVisible = false;
+(function playheadLoop() {
+  const playing = engine.isPlaying();
+  if (playing || engine.isPaused()) {
+    const pos = (Tone.Transport.ticks / (Tone.Transport.PPQ / 4)) % engine.steps;
+    setPlayhead(pianoRollEl, pos, playing && followToggle.checked && view === 'roll');
+    posEl.textContent = `${Math.floor(pos / 16) + 1}.${Math.floor((pos % 16) / 4) + 1}.${Math.floor(pos % 4) + 1}`;
+    headVisible = true;
+  } else if (headVisible) {
+    hidePlayhead(pianoRollEl);
+    posEl.textContent = '1.1.1';
+    headVisible = false;
+  }
+  requestAnimationFrame(playheadLoop);
+})();
+
 // ---- Undo / redo (note data only: cells and lengths) ----
 const undoStack = [];
 const redoStack = [];
@@ -515,8 +543,8 @@ window.addEventListener('keydown', (e) => {
 
 playBtn.addEventListener('click', async () => {
   setStatus(engine.isPaused() ? 'Resuming…' : 'Playing…');
-  engine.onStep = (step) => updatePlayhead(pianoRollEl, step);
-  await engine.play();
+  await engine.play(startStep);
+  startStep = 0;
   setStatus('Playing…');
 });
 
@@ -527,7 +555,10 @@ pauseBtn.addEventListener('click', () => {
 });
 
 stopBtn.addEventListener('click', () => {
+  startStep = 0;
   engine.stop();
+  hidePlayhead(pianoRollEl);
+  posEl.textContent = '1.1.1';
   setStatus('');
 });
 

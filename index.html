@@ -37,6 +37,10 @@
             <span>SWING %</span>
             <input id="swing-input" type="number" min="0" max="100" step="5" value="0" />
           </label>
+          <div class="lcd">
+            <span>POS</span>
+            <output id="pos-display">1.1.1</output>
+          </div>
           <label class="lcd wide">
             <span>PROJECT</span>
             <input id="project-name-input" type="text" value="Untitled Project" />
@@ -81,6 +85,10 @@
               <button class="view-tab active" data-view="roll">Piano Roll</button>
               <button class="view-tab" data-view="mixer">Mixer</button>
               <span class="spacer"></span>
+              <label class="checkbox-label" title="Keep the playhead centred while playing">
+                <input id="follow-toggle" type="checkbox" checked /> Follow
+              </label>
+              <input id="zoom-input" class="zoom" type="range" min="10" max="48" step="2" value="24" title="Zoom" />
               <button id="undo-btn" class="btn small" title="Undo (Ctrl+Z)">↶</button>
               <button id="redo-btn" class="btn small" title="Redo (Ctrl+Y)">↷</button>
             </div>
