@@ -21,6 +21,7 @@ export function serializeProject(engine, projectName = 'Untitled Project') {
       rangeLow: t.rangeLow,
       rangeHigh: t.rangeHigh,
       cells: t.cells.map((set) => [...set]),
+      lengths: Object.fromEntries(t.lengths),
     })),
   };
 }
@@ -71,6 +72,7 @@ export function applyProjectToEngine(engine, data, createTrack) {
     track.rangeLow = saved.rangeLow ?? track.rangeLow;
     track.rangeHigh = saved.rangeHigh ?? track.rangeHigh;
     track.cells = normalizeCells(saved.cells, steps).map((arr) => new Set(arr));
+    track.lengths = new Map(Object.entries(saved.lengths || {}).map(([k, v]) => [k, Number(v)]));
     engine.addTrack(track);
   }
 

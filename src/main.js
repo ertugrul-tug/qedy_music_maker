@@ -1,5 +1,5 @@
 import './style.css';
-import { Engine, createTrack, LOW_MIDI, HIGH_MIDI, midiToNoteName } from './audio/engine.js';
+import { Engine, createTrack, GRID_LOW as LOW_MIDI, GRID_HIGH as HIGH_MIDI, midiToNoteName } from './audio/engine.js';
 import { INSTRUMENTS, INSTRUMENT_KEYS } from './audio/instruments.js';
 import { renderPianoRoll, updatePlayhead } from './ui/pianoRoll.js';
 import { startOscilloscopeLoop } from './ui/oscilloscope.js';
@@ -272,10 +272,19 @@ function renderControls() {
 function renderGrid() {
   const track = getActiveTrack();
   if (!track) return;
-  renderPianoRoll(pianoRollEl, track, (step, midi) => {
-    engine.toggleNote(track.id, step, midi);
+  renderPianoRoll(pianoRollEl, track, (step, midi, e) => {
+    if (e?.shiftKey && track.cells[step].has(midi)) {
+      // Shift+click cycles the note length: 1 -> 2 -> 4 -> 8 -> 16 steps -> 1
+      const len = track.lengths.get(`${step}:${midi}`) || 1;
+      engine.setNoteLength(track.id, step, midi, len >= 16 ? 1 : len * 2);
+    } else {
+      engine.toggleNote(track.id, step, midi);
+    }
     renderGrid();
-  }, -1);
+  }, -1, (fs, fm, ts, tm) => {
+    engine.moveNote(track.id, fs, fm, ts, tm);
+    renderGrid();
+  });
 }
 
 function renderAll() {
@@ -438,11 +447,14 @@ renderLiveKeys();
 const recBtn = document.getElementById('rec-btn');
 const recUndo = document.getElementById('rec-undo');
 const recQuant = document.getElementById('rec-quant');
-let recording = null; // { track, snapshot }
+let recording = null; // { track, snapshot, lengths }
+let counting = false;
+const openNotes = new Map(); // midi -> { track, step, pos } for notes still being held
 let lastTake = null;
 
 live.getClip = getActiveTrack;
 document.getElementById('live-loopmode').addEventListener('change', (e) => { live.state.loopMode = e.target.checked; });
+document.getElementById('live-chord').addEventListener('change', (e) => { live.state.chord = e.target.checked; });
 document.getElementById('live-metro').addEventListener('change', (e) => live.setMetronome(e.target.checked));
 
 function stopRecording() {
@@ -457,17 +469,29 @@ function stopRecording() {
 
 recBtn.addEventListener('click', async () => {
   if (recording) return stopRecording();
+  if (counting) return;
   const track = getActiveTrack();
-  recording = { track, snapshot: track.cells.map((c) => new Set(c)) };
   recBtn.classList.add('active');
+  if (!engine.isPlaying()) {
+    counting = true;
+    setStatus('Count-in…');
+    await live.countIn();
+    counting = false;
+    playBtn.click();
+  }
+  recording = {
+    track,
+    snapshot: track.cells.map((c) => new Set(c)),
+    lengths: new Map(track.lengths),
+  };
   recBtn.textContent = '■ Recording';
-  if (!engine.isPlaying()) playBtn.click();
   setStatus('Recording… play your keys');
 });
 
 recUndo.addEventListener('click', () => {
   if (!lastTake) return;
   lastTake.track.cells = lastTake.snapshot;
+  lastTake.track.lengths = lastTake.lengths;
   lastTake = null;
   recUndo.disabled = true;
   renderGrid();
@@ -475,14 +499,28 @@ recUndo.addEventListener('click', () => {
 
 stopBtn.addEventListener('click', stopRecording);
 
+const transportSteps = () => Tone.Transport.ticks / (Tone.Transport.PPQ / 4); // position in 16th steps
+
 // Notes are snapped to the chosen grid and written into the armed track's loop.
 live.onNoteOn = (midi) => {
   if (!recording || !engine.isPlaying()) return;
   const q = Number(recQuant.value);
-  const pos = Tone.Transport.ticks / (Tone.Transport.PPQ / 4); // current position in 16th steps
+  const pos = transportSteps();
   const step = (Math.round(pos / q) * q) % engine.steps;
   recording.track.cells[step].add(midi);
+  openNotes.set(midi, { track: recording.track, step, pos });
   if (recording.track.id === activeTrackId) renderGrid();
+};
+
+// Releasing a key (or the sustain pedal) fixes the note's length, snapped like its start.
+live.onNoteOff = (midi) => {
+  const open = openNotes.get(midi);
+  if (!open) return;
+  openNotes.delete(midi);
+  const q = Number(recQuant.value);
+  const len = Math.min(engine.steps - open.step, Math.max(1, Math.round((transportSteps() - open.pos) / q) * q));
+  engine.setNoteLength(open.track.id, open.step, midi, len);
+  if (open.track.id === activeTrackId) renderGrid();
 };
 
 // Buttons keep focus after a click, and Space would then re-click them; the keyboard is for playing.

@@ -22,12 +22,13 @@ export function createLive(engine) {
   const reverb = new Tone.Reverb({ decay: 3, wet: 0.25 }).connect(engine.master);
   let synth = null;
   let instrument = 'strings';
-  const state = { scale: 'chromatic', root: 0, octave: 4, loopMode: false };
+  const state = { scale: 'chromatic', root: 0, octave: 4, loopMode: false, chord: false };
   const held = new Map(); // code -> midi
   const sustained = new Set(); // midi released while pedal is down
   let pedal = false;
   let onChange = () => {};
   let onNoteOn = () => {};
+  let onNoteOff = () => {};
   let getClip = () => null; // -> track whose cells are the loop clip
   const loops = new Map(); // code -> Tone.Sequence (key-triggered clip loops)
   let drumSeq = null;
@@ -65,14 +66,35 @@ export function createLive(engine) {
 
   const name = (m) => midiToNoteName(m);
 
+  // Chord mode: the diatonic triad on the pressed degree (major triad in chromatic mode).
+  function chordFor(code, midi) {
+    const white = HOME_ROW.indexOf(code);
+    if (state.scale === 'chromatic' || white < 0) return [midi, midi + 4, midi + 7];
+    const iv = SCALES[state.scale];
+    const base = 12 * (state.octave + 1) + state.root;
+    const degree = (d) => base + iv[d % iv.length] + 12 * Math.floor(d / iv.length);
+    return [degree(white), degree(white + 2), degree(white + 4)];
+  }
+
+  const extras = new Map(); // code -> extra chord tones (root is in `held`)
+  const tonesOf = (code) => [held.get(code), ...(extras.get(code) || [])];
+
+  function release(midi) {
+    synth.triggerRelease(name(midi));
+    onNoteOff(midi);
+  }
+
   function noteOn(code) {
     const midi = noteFor(code);
     if (midi === null || held.has(code)) return;
     if (state.loopMode && startLoop(code, midi)) return;
-    if (sustained.delete(midi)) synth.triggerRelease(name(midi));
     held.set(code, midi);
-    synth.triggerAttack(name(midi));
-    onNoteOn(midi);
+    if (state.chord) extras.set(code, chordFor(code, midi).filter((m) => m !== midi));
+    for (const m of tonesOf(code)) {
+      if (sustained.delete(m)) release(m);
+      synth.triggerAttack(name(m));
+      onNoteOn(m);
+    }
     onChange();
   }
 
@@ -82,11 +104,13 @@ export function createLive(engine) {
     const clip = getClip();
     const first = clip && clip.cells.findIndex((c) => c.size > 0);
     if (!clip || first < 0) return false;
-    const root = Math.min(...clip.cells[first]);
-    const shift = midi - root;
+    const shift = midi - Math.min(...clip.cells[first]);
     Tone.Transport.start();
     const seq = new Tone.Sequence((time, step) => {
-      for (const m of clip.cells[step]) synth.triggerAttackRelease(name(m + shift), '16n', time);
+      for (const m of clip.cells[step]) {
+        const len = clip.lengths.get(`${step}:${m}`) || 1;
+        synth.triggerAttackRelease(name(m + shift), (len * 60) / engine.bpm / 4, time);
+      }
     }, [...Array(clip.cells.length).keys()], '16n');
     seq.start('@16n');
     loops.set(code, seq);
@@ -96,28 +120,30 @@ export function createLive(engine) {
   }
 
   function noteOff(code) {
-    const midi = held.get(code);
-    if (midi === undefined) return;
+    if (!held.has(code)) return;
+    const tones = tonesOf(code);
     held.delete(code);
+    extras.delete(code);
     const loop = loops.get(code);
     if (loop) {
       loop.stop();
       loop.dispose();
       loops.delete(code);
       maybeStopTransport();
-      onChange();
-      return;
+    } else {
+      for (const m of tones) {
+        if (pedal) sustained.add(m);
+        else release(m);
+      }
     }
-    if (pedal) sustained.add(midi);
-    else synth.triggerRelease(name(midi));
     onChange();
   }
 
   function setPedal(down) {
     pedal = down;
     if (down) return;
-    const stillHeld = new Set(held.values());
-    for (const m of sustained) if (!stillHeld.has(m)) synth.triggerRelease(name(m));
+    const stillHeld = new Set([...held.keys()].flatMap(tonesOf));
+    for (const m of sustained) if (!stillHeld.has(m)) release(m);
     sustained.clear();
   }
 
@@ -126,6 +152,7 @@ export function createLive(engine) {
     for (const l of loops.values()) { l.stop(); l.dispose(); }
     loops.clear();
     held.clear();
+    extras.clear();
     sustained.clear();
     onChange();
   }
@@ -190,6 +217,15 @@ export function createLive(engine) {
     isDrumming: () => !!drumSeq,
     set onChange(fn) { onChange = fn; },
     set onNoteOn(fn) { onNoteOn = fn; },
+    set onNoteOff(fn) { onNoteOff = fn; },
+    // Four metronome clicks (accent on beat 1) before recording starts.
+    async countIn(beats = 4) {
+      await Tone.start();
+      const beat = 60 / engine.bpm;
+      const t0 = Tone.now() + 0.05;
+      for (let i = 0; i < beats; i++) click.triggerAttackRelease(i === 0 ? 'G6' : 'C6', '32n', t0 + i * beat);
+      await new Promise((r) => setTimeout(r, (0.05 + beats * beat) * 1000));
+    },
     set getClip(fn) { getClip = fn; },
     setMetronome: (on) => { metro.mute = !on; },
   };

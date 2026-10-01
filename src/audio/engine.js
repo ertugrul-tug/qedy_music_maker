@@ -5,7 +5,11 @@ import { INSTRUMENTS, INSTRUMENT_KEYS, DEFAULT_INSTRUMENT } from './instruments.
 export const DEFAULT_STEPS = 32; // 2 bars of 16th notes — a short loop
 export const LOW_MIDI = 48; // C3
 export const HIGH_MIDI = 83; // B5
-export const PITCH_COUNT = HIGH_MIDI - LOW_MIDI + 1;
+// The piano roll shows a wider range than a track's default generator range (C2..B6)
+// so notes played on other octaves of the live keyboard are visible and editable.
+export const GRID_LOW = 36;
+export const GRID_HIGH = 95;
+export const PITCH_COUNT = GRID_HIGH - GRID_LOW + 1;
 
 const SYNTH_CLASSES = {
   Synth: Tone.Synth,
@@ -34,6 +38,8 @@ export function createTrack(name = `Track ${nextTrackId}`, steps = DEFAULT_STEPS
     rangeHigh: HIGH_MIDI,
     // cells[step] = Set of midi note numbers active at that step
     cells: Array.from({ length: steps }, () => new Set()),
+    // Optional note lengths in steps, keyed "step:midi"; a missing key means 1 step.
+    lengths: new Map(),
   };
   return track;
 }
@@ -136,8 +142,25 @@ export class Engine {
   toggleNote(trackId, step, midi) {
     const track = this.tracks.find((t) => t.id === trackId);
     const cell = track.cells[step];
-    if (cell.has(midi)) cell.delete(midi);
-    else cell.add(midi);
+    if (cell.has(midi)) {
+      cell.delete(midi);
+      track.lengths.delete(`${step}:${midi}`);
+    } else cell.add(midi);
+  }
+
+  setNoteLength(trackId, step, midi, len) {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (len > 1) track.lengths.set(`${step}:${midi}`, len);
+    else track.lengths.delete(`${step}:${midi}`);
+  }
+
+  // Moves a note (keeping its length) to another step/pitch.
+  moveNote(trackId, fromStep, fromMidi, toStep, toMidi) {
+    const track = this.tracks.find((t) => t.id === trackId);
+    const len = track.lengths.get(`${fromStep}:${fromMidi}`) || 1;
+    this.toggleNote(trackId, fromStep, fromMidi);
+    track.cells[toStep].add(toMidi);
+    this.setNoteLength(trackId, toStep, toMidi, len);
   }
 
   setRange(trackId, low, high) {
@@ -151,16 +174,24 @@ export class Engine {
     const track = this.tracks.find((t) => t.id === trackId);
     const n = track.cells.length;
     track.cells = track.cells.map((_, i) => track.cells[(((i - delta) % n) + n) % n]);
+    track.lengths = new Map(
+      [...track.lengths].map(([key, len]) => {
+        const [step, midi] = key.split(':').map(Number);
+        return [`${(((step + delta) % n) + n) % n}:${midi}`, len];
+      })
+    );
   }
 
   clearTrack(trackId) {
     const track = this.tracks.find((t) => t.id === trackId);
     track.cells = Array.from({ length: this.steps }, () => new Set());
+    track.lengths = new Map();
   }
 
   // Regenerates one track's note pattern using its own pitch range.
   randomizeTrack(trackId, { root = 0, scaleName = 'major', density = 0.4 } = {}) {
     const track = this.tracks.find((t) => t.id === trackId);
+    track.lengths = new Map();
     track.cells = generatePattern({
       steps: this.steps,
       low: track.rangeLow,
@@ -204,10 +235,9 @@ export class Engine {
       (time, step) => {
         for (const track of this.tracks) {
           const inst = this.instruments.get(track.id);
-          const notes = track.cells[step];
-          if (notes && notes.size > 0) {
-            const noteNames = [...notes].map(midiToNoteName);
-            inst.synth.triggerAttackRelease(noteNames, '16n', time);
+          for (const midi of track.cells[step] || []) {
+            const len = track.lengths.get(`${step}:${midi}`) || 1;
+            inst.synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time);
           }
         }
         if (this.onStep) {
@@ -276,10 +306,9 @@ export class Engine {
         (time, step) => {
           for (const track of this.tracks) {
             const synth = offlineInstruments.get(track.id);
-            const notes = track.cells[step];
-            if (notes && notes.size > 0) {
-              const noteNames = [...notes].map(midiToNoteName);
-              synth.triggerAttackRelease(noteNames, '16n', time);
+            for (const midi of track.cells[step] || []) {
+              const len = track.lengths.get(`${step}:${midi}`) || 1;
+              synth.triggerAttackRelease(midiToNoteName(midi), (len * 60) / this.bpm / 4, time);
             }
           }
         },
